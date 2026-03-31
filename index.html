@@ -151,6 +151,12 @@
       const [notificationSound, setNotificationSound] = useState(true);
       const [notificationVibration, setNotificationVibration] = useState(true);
       
+      // Message deletion mode: 'after_read' or 'after_24h'
+      const [deletionMode, setDeletionMode] = useState(() => {
+        const saved = localStorage.getItem('messageDeletionMode');
+        return saved || 'after_read';
+      });
+      
       // Call state
       const [inCall, setInCall] = useState(false);
       const [callType, setCallType] = useState('');
@@ -535,11 +541,14 @@
         }
       }, [messages, isAuthenticated, currentUser, currentView, selectedChat]);
 
-      // Auto-delete read messages when user exits (Snapchat-style)
+      // Auto-delete messages based on user preference
       useEffect(() => {
         if (!isAuthenticated) return;
 
         const deleteReadMessages = async () => {
+          // Only delete if mode is 'after_read'
+          if (deletionMode !== 'after_read') return;
+
           try {
             const messagesToDelete = messages.filter(msg => {
               // Delete message if current user has read it
@@ -580,7 +589,7 @@
           window.removeEventListener('beforeunload', handleBeforeUnload);
           document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-      }, [isAuthenticated, messages, reads, currentUser]);
+      }, [isAuthenticated, messages, reads, currentUser, deletionMode]);
 
       // Load notification settings on mount
       useEffect(() => {
@@ -629,18 +638,20 @@
       };
 
       const handleBackToResponses = async () => {
-        // Delete read messages before going back (Snapchat-style)
-        const messagesToDelete = messages.filter(msg => {
-          if (msg.sender !== currentUser) {
-            return reads[msg.id] && reads[msg.id][currentUser];
-          } else {
-            return reads[msg.id] && reads[msg.id][selectedChat];
-          }
-        });
+        // Delete read messages before going back - only if mode is 'after_read'
+        if (deletionMode === 'after_read') {
+          const messagesToDelete = messages.filter(msg => {
+            if (msg.sender !== currentUser) {
+              return reads[msg.id] && reads[msg.id][currentUser];
+            } else {
+              return reads[msg.id] && reads[msg.id][selectedChat];
+            }
+          });
 
-        for (const msg of messagesToDelete) {
-          await firebase.database().ref(`messages/${msg.id}`).remove();
-          await firebase.database().ref(`reads/${msg.id}`).remove();
+          for (const msg of messagesToDelete) {
+            await firebase.database().ref(`messages/${msg.id}`).remove();
+            await firebase.database().ref(`reads/${msg.id}`).remove();
+          }
         }
 
         setCurrentView('responses');
@@ -869,6 +880,12 @@
           }
         };
 
+        const handleToggleDeletionMode = () => {
+          const newMode = deletionMode === 'after_read' ? 'after_24h' : 'after_read';
+          setDeletionMode(newMode);
+          localStorage.setItem('messageDeletionMode', newMode);
+        };
+
         return (
           <div className="full-page" style={{maxWidth:'480px', margin:'0 auto', background:'#0a0a0a'}}>
             {/* Header with Back Button */}
@@ -964,6 +981,44 @@
                   >
                     <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${notificationVibration ? 'translate-x-7' : 'translate-x-1'}`} />
                   </button>
+                </div>
+              </div>
+
+              {/* Message History Settings */}
+              <div className="bg-gray-800 rounded-lg p-6 mb-4 mt-4">
+                <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Message History
+                </h2>
+
+                {/* Deletion Mode Toggle */}
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <p className="text-white font-medium">Auto-Delete Messages</p>
+                    <p className="text-sm text-gray-400">
+                      {deletionMode === 'after_read' ? 'Delete after both users read' : 'Delete after 24 hours'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleToggleDeletionMode}
+                    className={`relative inline-flex h-8 w-14 items-center rounded-full transition ${deletionMode === 'after_read' ? 'bg-purple-600' : 'bg-blue-600'}`}
+                  >
+                    <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${deletionMode === 'after_read' ? 'translate-x-1' : 'translate-x-7'}`} />
+                  </button>
+                </div>
+
+                <div className="bg-gray-700/50 rounded-lg p-3 mt-3">
+                  <p className="text-sm text-gray-300">
+                    <strong className="text-white">
+                      {deletionMode === 'after_read' ? '📱 Snapchat Mode (After Read):' : '🕐 Time-based Mode (24 Hours):'}
+                    </strong>
+                    <br/>
+                    {deletionMode === 'after_read' 
+                      ? 'Messages disappear when both users read them and exit the chat. Unread messages stay forever.' 
+                      : 'Messages automatically delete 24 hours after being sent, regardless of read status. Both read and unread messages will be deleted.'}
+                  </p>
                 </div>
               </div>
 
