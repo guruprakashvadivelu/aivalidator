@@ -4,37 +4,97 @@ import { uploadMedia } from '../services/mediaService';
 import MessageBubble from '../components/MessageBubble';
 import SnapViewer from '../components/SnapViewer';
 
+// Date separator helper
+const getDateLabel = (timestamp) => {
+  const date = new Date(timestamp);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return 'Today';
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const DateSeparator = ({ label }) => (
+  <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
+    <span style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '12px', padding: '3px 10px', borderRadius: '999px' }}>
+      {label}
+    </span>
+  </div>
+);
+
+const ReplyBar = ({ replyTo, onCancel }) => {
+  if (!replyTo) return null;
+  return (
+    <div style={{ background: '#1a2830', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '3px solid #00a884' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: '#00a884', fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>
+          {replyTo.sender === 'user1' ? 'Instance A' : 'Instance B'}
+        </div>
+        <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {replyTo.mediaType ? `📎 ${replyTo.mediaType}` : replyTo.text}
+        </div>
+      </div>
+      <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'rgba(255,255,255,0.5)' }}>
+        <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+  );
+};
+
 const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   const [input, setInput] = useState('');
   const [uploading, setUploading] = useState(false);
   const [snapViewer, setSnapViewer] = useState(null);
+  const [replyTo, setReplyTo] = useState(null);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [mediaPreview, setMediaPreview] = useState(null);
+
   const messagesEndRef = useRef(null);
+  const messagesBodyRef = useRef(null);
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const typingTimer = useRef(null);
+  const inputRef = useRef(null);
 
   const {
-    messages, reads, isOtherTyping,
-    sendMessage, sendMedia, setTypingStatus, deleteReadMessages
+    messages, reads, isOtherTyping, reactions,
+    sendMessage, sendMedia, setTypingStatus,
+    deleteReadMessages, addReaction, removeReaction,
   } = useMessages(currentUser, selectedChat);
 
   const otherName = selectedChat === 'user1' ? 'Instance A' : 'Instance B';
   const otherLetter = selectedChat === 'user1' ? 'A' : 'B';
   const otherPresence = presence[selectedChat];
+
+  // Last seen formatting
   const presenceText = otherPresence?.online
     ? 'Online'
     : otherPresence?.lastSeen
-      ? `Last seen ${new Date(otherPresence.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+      ? (() => {
+          const diff = Date.now() - otherPresence.lastSeen;
+          if (diff < 60000) return 'Last seen just now';
+          if (diff < 3600000) return `Last seen ${Math.floor(diff / 60000)}m ago`;
+          if (diff < 86400000) return `Last seen ${Math.floor(diff / 3600000)}h ago`;
+          return `Last seen ${new Date(otherPresence.lastSeen).toLocaleDateString([], { day: 'numeric', month: 'short' })}`;
+        })()
       : 'Offline';
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  // Scroll behavior
+  const scrollToBottom = (smooth = true) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+  };
 
-  useEffect(() => {
-    const fn = () => { if (document.hidden) deleteReadMessages(); };
-    document.addEventListener('visibilitychange', fn);
-    return () => document.removeEventListener('visibilitychange', fn);
-  }, [deleteReadMessages]);
+  useEffect(() => { scrollToBottom(); }, [messages]);
+
+  const handleScroll = () => {
+    const el = messagesBodyRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollBtn(distFromBottom > 150);
+  };
 
   const handleBack = async () => {
     await deleteReadMessages();
@@ -46,9 +106,10 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
     const text = input.trim();
     if (!text) return;
     setInput('');
+    setReplyTo(null);
     setTypingStatus(false);
     clearTimeout(typingTimer.current);
-    await sendMessage(text);
+    await sendMessage(text, replyTo);
   };
 
   const handleInputChange = e => {
@@ -58,13 +119,22 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
     typingTimer.current = setTimeout(() => setTypingStatus(false), 1500);
   };
 
-  const handleFileSelect = async e => {
-    const file = e.target.files[0];
+  // File select → show preview before sending
+  const handleFileSelected = async (file) => {
     if (!file) return;
-    e.target.value = '';
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    if (!isImage && !isVideo) { alert('Please select an image or video'); return; }
+    const url = URL.createObjectURL(file);
+    setMediaPreview({ file, url, type: isImage ? 'image' : 'video' });
+  };
+
+  const handleSendMedia = async () => {
+    if (!mediaPreview) return;
     setUploading(true);
+    setMediaPreview(null);
     try {
-      const { url, type } = await uploadMedia(file, currentUser);
+      const { url, type } = await uploadMedia(mediaPreview.file, currentUser);
       await sendMedia(url, type);
     } catch {
       alert('Upload failed. Please try again.');
@@ -73,26 +143,59 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
     }
   };
 
+  const handleReact = async (msgId, emoji) => {
+    if (!emoji) {
+      await removeReaction(msgId);
+    } else {
+      const current = reactions?.[msgId]?.[currentUser];
+      if (current === emoji) {
+        await removeReaction(msgId);
+      } else {
+        await addReaction(msgId, emoji);
+      }
+    }
+  };
+
+  // Group messages by date
+  const grouped = [];
+  let lastDate = null;
+  messages.forEach(msg => {
+    const label = getDateLabel(msg.timestamp);
+    if (label !== lastDate) {
+      grouped.push({ type: 'separator', label, key: `sep-${msg.timestamp}` });
+      lastDate = label;
+    }
+    grouped.push({ type: 'message', msg, key: msg.id });
+  });
+
   return (
-    /* 
-      chat-screen = flex column, height:100dvh
-      iOS with interactive-widget=resizes-content:
-        keyboard opens → dvh shrinks → flex column shrinks
-        header (flex:0 0 auto) stays full size at top ✓
-        footer (flex:0 0 auto) stays full size at bottom ✓
-        messages (flex:1) shrinks to fill remaining space ✓
-    */
     <div className="chat-screen">
       {snapViewer && <SnapViewer snap={snapViewer} onClose={() => setSnapViewer(null)} />}
 
-      {/* HEADER - flex:0 0 auto - never shrinks */}
+      {/* Media Preview Modal */}
+      {mediaPreview && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
+          {mediaPreview.type === 'image'
+            ? <img src={mediaPreview.url} alt="" style={{ maxWidth: '90vw', maxHeight: '65vh', objectFit: 'contain', borderRadius: '12px' }} />
+            : <video src={mediaPreview.url} controls style={{ maxWidth: '90vw', maxHeight: '65vh', borderRadius: '12px' }} />
+          }
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <button onClick={() => setMediaPreview(null)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '999px', color: 'white', padding: '12px 28px', fontSize: '15px', cursor: 'pointer' }}>
+              Cancel
+            </button>
+            <button onClick={handleSendMedia} style={{ background: '#00a884', border: 'none', borderRadius: '999px', color: 'white', padding: '12px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}>
+              Send
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* HEADER */}
       <div className="chat-header">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button onClick={handleBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px 4px 2px', display: 'flex' }}>
-              <svg width="22" height="22" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                <path d="M15 19l-7-7 7-7"/>
-              </svg>
+              <svg width="22" height="22" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
             </button>
             <div style={{ position: 'relative' }}>
               <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'linear-gradient(135deg,#a855f7,#ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '15px', color: 'white' }}>
@@ -122,17 +225,23 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
         </div>
       </div>
 
-      {/* MESSAGES - flex:1 - takes all space between header and footer */}
-      <div className="chat-messages" style={{ padding: '8px 12px' }}>
-        {messages.map(msg => (
-          <MessageBubble
-            key={msg.id}
-            msg={msg}
-            isMine={msg.sender === currentUser}
-            isRead={!!(reads[msg.id]?.[selectedChat])}
-            onMediaClick={setSnapViewer}
-          />
-        ))}
+      {/* MESSAGES */}
+      <div ref={messagesBodyRef} className="chat-messages" style={{ padding: '8px 12px' }} onScroll={handleScroll}>
+        {grouped.map(item =>
+          item.type === 'separator'
+            ? <DateSeparator key={item.key} label={item.label} />
+            : <MessageBubble
+                key={item.key}
+                msg={item.msg}
+                isMine={item.msg.sender === currentUser}
+                isRead={!!(reads[item.msg.id]?.[selectedChat])}
+                onMediaClick={setSnapViewer}
+                onReply={msg => { setReplyTo(msg); inputRef.current?.focus(); }}
+                reactions={reactions}
+                currentUser={currentUser}
+                onReact={handleReact}
+              />
+        )}
         {isOtherTyping && (
           <div style={{ display: 'flex', marginBottom: '4px' }}>
             <div style={{ background: '#1f2c34', borderRadius: '12px 12px 12px 2px', padding: '12px 16px', display: 'flex', gap: '4px', alignItems: 'center' }}>
@@ -145,12 +254,42 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* FOOTER - flex:0 0 auto - never shrinks, stays above keyboard */}
+      {/* Scroll to bottom button */}
+      {showScrollBtn && (
+        <button
+          onClick={() => scrollToBottom()}
+          style={{
+            position: 'absolute', bottom: '80px', right: '16px',
+            background: '#1f2c34', border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '50%', width: '40px', height: '40px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', zIndex: 10,
+          }}
+        >
+          <svg width="18" height="18" fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+      )}
+
+      {/* FOOTER */}
       <div className="chat-footer">
+        <ReplyBar replyTo={replyTo} onCancel={() => setReplyTo(null)} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px' }}>
-          <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*,video/*" style={{ display: 'none' }} />
-          <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', opacity: uploading ? 0.5 : 1 }}>
+          {/* Hidden file inputs */}
+          <input type="file" ref={fileInputRef} onChange={e => { handleFileSelected(e.target.files[0]); e.target.value=''; }} accept="image/*,video/*" style={{ display: 'none' }} />
+          <input type="file" ref={cameraInputRef} onChange={e => { handleFileSelected(e.target.files[0]); e.target.value=''; }} accept="image/*,video/*" capture="environment" style={{ display: 'none' }} />
+
+          {/* Camera button */}
+          <button onClick={() => cameraInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex' }}>
+            <svg width="22" height="22" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+
+          {/* Attachment button */}
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', opacity: uploading ? 0.5 : 1 }}>
             {uploading
               ? <div style={{ width: '22px', height: '22px', border: '2px solid rgba(255,255,255,0.25)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
               : <svg width="22" height="22" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -158,7 +297,9 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
                 </svg>
             }
           </button>
+
           <input
+            ref={inputRef}
             type="text" value={input} onChange={handleInputChange}
             onKeyPress={e => e.key === 'Enter' && handleSend()}
             placeholder="Message"

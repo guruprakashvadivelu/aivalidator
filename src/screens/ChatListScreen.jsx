@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { ref, onValue } from 'firebase/database';
+import { db } from '../firebase/config';
 
 const ChatListScreen = ({ currentUser, presence, onSelectChat, onLogout, onSettings }) => {
   const other = currentUser === 'user1' ? 'user2' : 'user1';
@@ -7,28 +9,57 @@ const ChatListScreen = ({ currentUser, presence, onSelectChat, onLogout, onSetti
   const myLetter = currentUser === 'user1' ? 'A' : 'B';
   const isOnline = !!presence[other]?.online;
 
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [lastMessage, setLastMessage] = useState(null);
+
+  useEffect(() => {
+    const u1 = onValue(ref(db, 'messages'), snap => {
+      const data = snap.val() || {};
+      const list = Object.values(data).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      if (list.length > 0) setLastMessage(list[0]);
+    });
+
+    const u2 = onValue(ref(db, 'reads'), snap => {
+      const reads = snap.val() || {};
+      const msgs = Object.entries(reads);
+      // Count messages from other user that I haven't read
+      onValue(ref(db, 'messages'), snap2 => {
+        const data = snap2.val() || {};
+        const count = Object.entries(data).filter(([id, msg]) =>
+          msg.sender !== currentUser && !reads[id]?.[currentUser]
+        ).length;
+        setUnreadCount(count);
+      }, { onlyOnce: true });
+    });
+
+    return () => { u1(); u2(); };
+  }, [currentUser]);
+
+  const formatLastMsg = (msg) => {
+    if (!msg) return '';
+    if (msg.mediaType === 'image') return '📷 Photo';
+    if (msg.mediaType === 'video') return '🎥 Video';
+    return msg.text || '';
+  };
+
+  const formatTime = (ts) => {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  };
+
   return (
     <div className="chatlist-screen">
-      {/* Header - safe-area-aware via CSS */}
       <div className="chatlist-header">
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '10px 16px 12px',
-        }}>
-          {/* My avatar */}
-          <div style={{
-            width: '36px', height: '36px', borderRadius: '50%',
-            background: 'linear-gradient(135deg, #a855f7, #ec4899)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: '700', fontSize: '15px', color: 'white', flexShrink: 0,
-          }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px 12px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg,#a855f7,#ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '15px', color: 'white', flexShrink: 0 }}>
             {myLetter}
           </div>
-
-          <span style={{ color: 'white', fontWeight: '700', fontSize: '18px' }}>
-            Responses
-          </span>
-
+          <span style={{ color: 'white', fontWeight: '700', fontSize: '18px' }}>Responses</span>
           <div style={{ display: 'flex', gap: '4px' }}>
             <button onClick={onSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', display: 'flex' }}>
               <svg width="22" height="22" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -47,48 +78,45 @@ const ChatListScreen = ({ currentUser, presence, onSelectChat, onLogout, onSetti
         </div>
       </div>
 
-      {/* List */}
       <div className="chatlist-body">
         <div
           onClick={() => onSelectChat(other)}
-          style={{
-            display: 'flex', alignItems: 'center',
-            padding: '12px 16px', cursor: 'pointer', gap: '14px',
-            transition: 'background 0.15s',
-          }}
+          style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: '14px' }}
           onTouchStart={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
           onTouchEnd={e => e.currentTarget.style.background = 'transparent'}
         >
+          {/* Avatar + online dot */}
           <div style={{ position: 'relative', flexShrink: 0 }}>
-            <div style={{
-              width: '56px', height: '56px', borderRadius: '50%',
-              background: 'linear-gradient(135deg, #a855f7, #ec4899)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: '700', fontSize: '22px', color: 'white',
-            }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'linear-gradient(135deg,#a855f7,#ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '22px', color: 'white' }}>
               {otherLetter}
             </div>
             {isOnline && (
-              <div style={{
-                position: 'absolute', bottom: '2px', right: '2px',
-                width: '13px', height: '13px', borderRadius: '50%',
-                background: '#22c55e', border: '2.5px solid #000',
-              }} />
+              <div style={{ position: 'absolute', bottom: '2px', right: '2px', width: '13px', height: '13px', borderRadius: '50%', background: '#22c55e', border: '2.5px solid #000' }} />
             )}
           </div>
 
+          {/* Name + last message */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: 'white', fontWeight: '600', fontSize: '16px', marginBottom: '2px' }}>
-              {otherName}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+              <span style={{ color: 'white', fontWeight: '600', fontSize: '16px' }}>{otherName}</span>
+              {lastMessage && (
+                <span style={{ color: 'rgba(255,255,255,0.38)', fontSize: '12px' }}>
+                  {formatTime(lastMessage.timestamp)}
+                </span>
+              )}
             </div>
-            <div style={{ color: isOnline ? '#22c55e' : 'rgba(255,255,255,0.38)', fontSize: '13px' }}>
-              {isOnline ? 'Online' : 'Offline'}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>
+                {lastMessage ? formatLastMsg(lastMessage) : (isOnline ? 'Online' : 'Offline')}
+              </span>
+              {/* Unread badge */}
+              {unreadCount > 0 && (
+                <div style={{ background: '#00a884', borderRadius: '999px', minWidth: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px', flexShrink: 0 }}>
+                  <span style={{ color: 'white', fontSize: '11px', fontWeight: '700' }}>{unreadCount}</span>
+                </div>
+              )}
             </div>
           </div>
-
-          <svg width="20" height="20" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
         </div>
       </div>
     </div>
