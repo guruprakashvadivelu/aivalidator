@@ -110,9 +110,10 @@ export function useMessages(currentUser, selectedChat) {
     await push(ref(db, 'messages'), msg);
   }, [currentUser]);
 
-  const sendMedia = useCallback(async (mediaUrl, mediaType) => {
+  const sendMedia = useCallback(async (dataUrl, mediaType) => {
     await push(ref(db, 'messages'), {
-      mediaUrl, mediaType,
+      mediaData: dataUrl,
+      mediaType,
       sender: currentUser,
       timestamp: Date.now(),
       expiresAt: Date.now() + 86400000,

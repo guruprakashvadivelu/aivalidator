@@ -13,23 +13,33 @@ const ChatListScreen = ({ currentUser, presence, onSelectChat, onLogout, onSetti
   const [lastMessage, setLastMessage] = useState(null);
 
   useEffect(() => {
+    // Listen to messages and reads together
+    let messages = {};
+    let reads = {};
+
+    const recalculate = () => {
+      const list = Object.entries(messages)
+        .map(([id, m]) => ({ id, ...m }))
+        .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+      // Last message
+      if (list.length > 0) setLastMessage(list[list.length - 1]);
+
+      // Unread = messages from other user that I haven't read
+      const count = list.filter(msg =>
+        msg.sender !== currentUser && !reads[msg.id]?.[currentUser]
+      ).length;
+      setUnreadCount(count);
+    };
+
     const u1 = onValue(ref(db, 'messages'), snap => {
-      const data = snap.val() || {};
-      const list = Object.values(data).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-      if (list.length > 0) setLastMessage(list[0]);
+      messages = snap.val() || {};
+      recalculate();
     });
 
     const u2 = onValue(ref(db, 'reads'), snap => {
-      const reads = snap.val() || {};
-      const msgs = Object.entries(reads);
-      // Count messages from other user that I haven't read
-      onValue(ref(db, 'messages'), snap2 => {
-        const data = snap2.val() || {};
-        const count = Object.entries(data).filter(([id, msg]) =>
-          msg.sender !== currentUser && !reads[id]?.[currentUser]
-        ).length;
-        setUnreadCount(count);
-      }, { onlyOnce: true });
+      reads = snap.val() || {};
+      recalculate();
     });
 
     return () => { u1(); u2(); };
@@ -37,7 +47,7 @@ const ChatListScreen = ({ currentUser, presence, onSelectChat, onLogout, onSetti
 
   const formatLastMsg = (msg) => {
     if (!msg) return '';
-    if (msg.mediaType === 'image') return '📷 Photo';
+    if (msg.mediaType === 'image' || msg.mediaData) return '📷 Photo';
     if (msg.mediaType === 'video') return '🎥 Video';
     return msg.text || '';
   };
@@ -46,9 +56,8 @@ const ChatListScreen = ({ currentUser, presence, onSelectChat, onLogout, onSetti
     if (!ts) return '';
     const d = new Date(ts);
     const now = new Date();
-    if (d.toDateString() === now.toDateString()) {
+    if (d.toDateString() === now.toDateString())
       return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
     return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
   };
 
@@ -85,7 +94,7 @@ const ChatListScreen = ({ currentUser, presence, onSelectChat, onLogout, onSetti
           onTouchStart={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
           onTouchEnd={e => e.currentTarget.style.background = 'transparent'}
         >
-          {/* Avatar + online dot */}
+          {/* Avatar */}
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'linear-gradient(135deg,#a855f7,#ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '22px', color: 'white' }}>
               {otherLetter}
@@ -95,24 +104,26 @@ const ChatListScreen = ({ currentUser, presence, onSelectChat, onLogout, onSetti
             )}
           </div>
 
-          {/* Name + last message */}
+          {/* Text area */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
-              <span style={{ color: 'white', fontWeight: '600', fontSize: '16px' }}>{otherName}</span>
+              <span style={{ color: 'white', fontWeight: unreadCount > 0 ? '700' : '600', fontSize: '16px' }}>
+                {otherName}
+              </span>
               {lastMessage && (
-                <span style={{ color: 'rgba(255,255,255,0.38)', fontSize: '12px' }}>
+                <span style={{ color: unreadCount > 0 ? '#00a884' : 'rgba(255,255,255,0.38)', fontSize: '12px', fontWeight: unreadCount > 0 ? '600' : '400' }}>
                   {formatTime(lastMessage.timestamp)}
                 </span>
               )}
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>
+              <span style={{ color: unreadCount > 0 ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.4)', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px', fontWeight: unreadCount > 0 ? '500' : '400' }}>
                 {lastMessage ? formatLastMsg(lastMessage) : (isOnline ? 'Online' : 'Offline')}
               </span>
               {/* Unread badge */}
               {unreadCount > 0 && (
-                <div style={{ background: '#00a884', borderRadius: '999px', minWidth: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px', flexShrink: 0 }}>
-                  <span style={{ color: 'white', fontSize: '11px', fontWeight: '700' }}>{unreadCount}</span>
+                <div style={{ background: '#00a884', borderRadius: '999px', minWidth: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px', flexShrink: 0, marginLeft: '8px' }}>
+                  <span style={{ color: 'white', fontSize: '12px', fontWeight: '700' }}>{unreadCount}</span>
                 </div>
               )}
             </div>

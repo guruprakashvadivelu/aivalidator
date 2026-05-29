@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMessages } from '../hooks/useMessages';
-import { uploadMedia } from '../services/mediaService';
+import { processMedia } from '../services/mediaService';
 import MessageBubble from '../components/MessageBubble';
 import SnapViewer from '../components/SnapViewer';
 
@@ -131,13 +131,15 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
 
   const handleSendMedia = async () => {
     if (!mediaPreview) return;
-    setUploading(true);
+    const fileToUpload = mediaPreview.file;
     setMediaPreview(null);
+    setUploading(true);
     try {
-      const { url, type } = await uploadMedia(mediaPreview.file, currentUser);
-      await sendMedia(url, type);
-    } catch {
-      alert('Upload failed. Please try again.');
+      const { dataUrl, type } = await processMedia(fileToUpload);
+      await sendMedia(dataUrl, type);
+    } catch (err) {
+      console.error('Media error:', err);
+      alert(err?.message || 'Failed to send media. Please try again.');
     } finally {
       setUploading(false);
     }

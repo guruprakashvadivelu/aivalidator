@@ -42,13 +42,13 @@ const SnapViewer = ({ snap, onClose }) => {
       >
         {snap.mediaType === 'image' ? (
           <img
-            src={snap.mediaUrl} alt=""
+            src={snap.mediaData || snap.mediaUrl} alt=""
             className="snap-open"
             style={{ maxWidth: '100vw', maxHeight: '100dvh', objectFit: 'contain', userSelect: 'none' }}
           />
         ) : (
           <video
-            src={snap.mediaUrl} autoPlay controls playsInline
+            src={snap.mediaData || snap.mediaUrl} autoPlay controls playsInline
             className="snap-open"
             style={{ maxWidth: '100vw', maxHeight: '100dvh', objectFit: 'contain' }}
           />

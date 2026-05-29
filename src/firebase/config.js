@@ -7,7 +7,7 @@ const firebaseConfig = {
   authDomain: "chat-4d5f4.firebaseapp.com",
   databaseURL: "https://chat-4d5f4-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "chat-4d5f4",
-  storageBucket: "chat-4d5f4.appspot.com",
+  storageBucket: "chat-4d5f4.firebasestorage.app",
   messagingSenderId: "525378181835",
   appId: "1:525378181835:web:a6c01ff3027c75c246d94e"
 };
