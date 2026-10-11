@@ -6,11 +6,11 @@ const Ticks = ({ isRead }) => (
   <svg width="16" height="11" viewBox="0 0 16 11" fill="none" style={{ flexShrink: 0 }}>
     {isRead ? (
       <>
-        <path d="M1 5.5L4.5 9L10 2" stroke="#53bdeb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M5 5.5L8.5 9L14 2" stroke="#53bdeb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M1 5.5L4.5 9L10 2" stroke="var(--tick-read)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M5 5.5L8.5 9L14 2" stroke="var(--tick-read)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
       </>
     ) : (
-      <path d="M3 5.5L6.5 9L13 2" stroke="rgba(255,255,255,0.45)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M3 5.5L6.5 9L13 2" stroke="var(--time-out)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     )}
   </svg>
 );
@@ -18,8 +18,8 @@ const Ticks = ({ isRead }) => (
 const ReplyPreview = ({ replyTo, isMine }) => {
   if (!replyTo) return null;
   return (
-    <div style={{ borderLeft: `3px solid ${isMine ? 'rgba(255,255,255,0.4)' : '#00a884'}`, paddingLeft: '8px', marginBottom: '5px', opacity: 0.85 }}>
-      <div style={{ color: isMine ? 'rgba(255,255,255,0.7)' : '#00a884', fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>
+    <div style={{ borderLeft: `3px solid ${isMine ? 'rgba(255,255,255,0.4)' : 'var(--accent-green)'}`, background: 'rgba(0,0,0,0.18)', borderRadius: '6px', padding: '4px 8px', marginBottom: '5px' }}>
+      <div style={{ color: isMine ? 'rgba(255,255,255,0.75)' : 'var(--accent-green)', fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>
         {replyTo.sender === 'user1' ? 'Instance A' : 'Instance B'}
       </div>
       <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -40,8 +40,8 @@ const ReactionsDisplay = ({ reactions, currentUser, onReact, msgId }) => {
     <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
       {Object.entries(grouped).map(([emoji, users]) => (
         <button key={emoji} onClick={() => onReact(msgId, emoji)} style={{
-          background: users.includes(currentUser) ? 'rgba(0,168,132,0.2)' : 'rgba(255,255,255,0.1)',
-          border: `1px solid ${users.includes(currentUser) ? 'rgba(0,168,132,0.5)' : 'rgba(255,255,255,0.15)'}`,
+          background: 'var(--bubble-in)',
+          border: `1px solid ${users.includes(currentUser) ? 'var(--accent-green)' : 'rgba(255,255,255,0.12)'}`,
           borderRadius: '999px', padding: '2px 7px', fontSize: '13px',
           cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', color: 'white',
         }}>
@@ -59,7 +59,7 @@ const EmojiPicker = ({ onSelect, onClose, isMine }) => (
       position: 'absolute',
       [isMine ? 'right' : 'left']: 0,
       bottom: 'calc(100% + 6px)',
-      background: '#2a3942',
+      background: 'var(--bubble-in)',
       borderRadius: '999px',
       padding: '8px 12px',
       display: 'flex', gap: '8px',
@@ -75,7 +75,20 @@ const EmojiPicker = ({ onSelect, onClose, isMine }) => (
   </>
 );
 
-const MessageBubble = React.memo(({ msg, isMine, isRead, onMediaClick, onReply, reactions, currentUser, onReact }) => {
+// WhatsApp-style tail on the last bubble of a group: a small curved flick at the bottom corner.
+// Drawn for the left (incoming) side and mirrored for outgoing.
+const BubbleTail = ({ isMine }) => (
+  <svg width="11" height="16" viewBox="0 0 11 16" aria-hidden="true" style={{
+    position: 'absolute', bottom: 0, [isMine ? 'right' : 'left']: '-5px',
+    transform: isMine ? 'scaleX(-1)' : undefined,
+  }}>
+    <path d="M11 0 C11 8 8 13 0 16 C6 16 9.5 15 11 13 Z" fill={isMine ? 'var(--bubble-out)' : 'var(--bubble-in)'} />
+  </svg>
+);
+
+const BUBBLE_RADIUS = '18px';
+
+const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, onMediaClick, onReply, reactions, currentUser, onReact }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const longPressTimer = useRef(null);
   const swipeStartX = useRef(null);
@@ -118,12 +131,13 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, onMediaClick, onReply, 
 
   const bubbleContent = (
     <div style={{
-      background: isMine ? '#005c4b' : '#1f2c34',
-      borderRadius: isMine ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-      padding: '7px 10px',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+      position: 'relative',
+      background: isMine ? 'var(--bubble-out)' : 'var(--bubble-in)',
+      borderRadius: BUBBLE_RADIUS,
+      padding: '7px 12px',
       userSelect: 'none',
     }}>
+      {isGroupEnd && <BubbleTail isMine={isMine} />}
       {msg.replyTo && <ReplyPreview replyTo={msg.replyTo} isMine={isMine} />}
       {msg.mediaData || msg.mediaUrl && (
         <div onClick={() => onMediaClick(msg)} style={{ marginBottom: '5px', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer' }}>
@@ -135,11 +149,11 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, onMediaClick, onReply, 
       )}
       {msg.text && (
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px' }}>
-          <span style={{ color: 'rgba(255,255,255,0.92)', fontSize: '15px', lineHeight: '1.4', flex: '1 1 auto', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+          <span style={{ color: 'var(--bubble-text)', fontSize: '14px', lineHeight: '20px', flex: '1 1 auto', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
             {msg.text}
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0, paddingBottom: '1px' }}>
-            <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', whiteSpace: 'nowrap' }}>{timeStr}</span>
+            <span style={{ color: isMine ? 'var(--time-out)' : 'var(--time-in)', fontSize: '11px', whiteSpace: 'nowrap' }}>{timeStr}</span>
             {isMine && <Ticks isRead={isRead} />}
           </span>
         </div>
@@ -147,7 +161,7 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, onMediaClick, onReply, 
       {/* Timestamp for media-only messages */}
       {msg.mediaData || msg.mediaUrl && !msg.text && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '3px', marginTop: '3px' }}>
-          <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px' }}>{timeStr}</span>
+          <span style={{ color: isMine ? 'var(--time-out)' : 'var(--time-in)', fontSize: '11px' }}>{timeStr}</span>
           {isMine && <Ticks isRead={isRead} />}
         </div>
       )}
@@ -157,7 +171,7 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, onMediaClick, onReply, 
   // Pure snap (image/video no text)
   if (msg.mediaData || msg.mediaUrl && !msg.text) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: '4px', position: 'relative' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: isGroupEnd ? '12px' : '5px', position: 'relative' }}>
         <div
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
@@ -165,7 +179,7 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, onMediaClick, onReply, 
         >
           <div onClick={() => onMediaClick(msg)} style={{
             position: 'relative', cursor: 'pointer',
-            borderRadius: isMine ? '16px 16px 3px 16px' : '16px 16px 16px 3px',
+            borderRadius: BUBBLE_RADIUS,
             overflow: 'hidden', width: '200px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
           }}>
@@ -190,9 +204,9 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, onMediaClick, onReply, 
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: '3px', position: 'relative' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: isGroupEnd ? '12px' : '5px', position: 'relative' }}>
       <div
-        style={{ maxWidth: '78%', position: 'relative' }}
+        style={{ maxWidth: '80%', position: 'relative' }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -206,6 +220,7 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, onMediaClick, onReply, 
 }, (prev, next) =>
   prev.msg.id === next.msg.id &&
   prev.isRead === next.isRead &&
+  prev.isGroupEnd === next.isGroupEnd &&
   JSON.stringify(prev.reactions?.[prev.msg.id]) === JSON.stringify(next.reactions?.[next.msg.id])
 );
 

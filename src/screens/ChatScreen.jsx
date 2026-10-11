@@ -18,7 +18,7 @@ const getDateLabel = (timestamp) => {
 
 const DateSeparator = ({ label }) => (
   <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
-    <span style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '12px', padding: '3px 10px', borderRadius: '999px' }}>
+    <span style={{ background: '#1d1f1f', color: 'var(--time-in)', fontSize: '12px', fontWeight: 500, padding: '4px 10px', borderRadius: '8px' }}>
       {label}
     </span>
   </div>
@@ -27,9 +27,9 @@ const DateSeparator = ({ label }) => (
 const ReplyBar = ({ replyTo, onCancel }) => {
   if (!replyTo) return null;
   return (
-    <div style={{ background: '#1a2830', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '3px solid #00a884' }}>
+    <div style={{ background: 'var(--bubble-in)', margin: '6px 8px 0', borderRadius: '10px', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '3px solid var(--accent-green)' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ color: '#00a884', fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>
+        <div style={{ color: 'var(--accent-green)', fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>
           {replyTo.sender === 'user1' ? 'Instance A' : 'Instance B'}
         </div>
         <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -45,9 +45,27 @@ const ReplyBar = ({ replyTo, onCancel }) => {
   );
 };
 
-// Message box: 20px lines + 10px padding top and bottom; grows to 5 lines, then scrolls.
+// Message box: 20px lines + 8px padding top and bottom; grows to 5 lines, then scrolls.
 const INPUT_LINE_HEIGHT = 20;
-const MAX_INPUT_HEIGHT = INPUT_LINE_HEIGHT * 5 + 20;
+const INPUT_PADDING_Y = 7;
+const MAX_INPUT_HEIGHT = INPUT_LINE_HEIGHT * 5 + INPUT_PADDING_Y * 2;
+
+// Icon buttons keep a 44pt tap area (iOS minimum) around smaller glyphs.
+const ICON_BUTTON = {
+  width: '44px', height: '44px', flexShrink: 0, padding: 0, border: 'none', background: 'none',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+};
+// WhatsApp-style rounded "glass" header controls.
+const HEADER_PILL = {
+  background: 'var(--chat-pill)', border: '1px solid var(--chat-pill-border)', borderRadius: '999px',
+};
+// Placeholder controls (stickers, voice notes, calls) must not take focus from the message box,
+// or iOS closes the keyboard; handle the tap on touchend and cancel it, like the send button.
+const keepKeyboard = handler => ({
+  onMouseDown: e => e.preventDefault(),
+  onTouchEnd: e => { e.preventDefault(); handler(); },
+  onClick: handler,
+});
 
 const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   const [input, setInput] = useState('');
@@ -65,6 +83,14 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   const inputRef = useRef(null);
   const screenRef = useRef(null);
   const inputStandInRef = useRef(null);
+  const [notice, setNotice] = useState(null);
+  const noticeTimer = useRef(null);
+  const showComingSoon = feature => {
+    setNotice(`${feature} — coming soon`);
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 1600);
+  };
+  const hasText = !!input.trim();
 
   const {
     messages, reads, isOtherTyping, reactions,
@@ -208,6 +234,11 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
     }
     grouped.push({ type: 'message', msg, key: msg.id });
   });
+  grouped.forEach((item, i) => {
+    if (item.type !== 'message') return;
+    const next = grouped[i + 1];
+    item.isGroupEnd = !next || next.type !== 'message' || next.msg.sender !== item.msg.sender;
+  });
 
   return (
     <div ref={screenRef} className={`chat-screen${keyboardOpen ? ' keyboard-open' : ''}`}>
@@ -233,33 +264,31 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
 
       {/* HEADER */}
       <div className="chat-header">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button onClick={handleBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px 4px 2px', display: 'flex' }}>
-              <svg width="22" height="22" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
-            </button>
-            <div style={{ position: 'relative' }}>
-              <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'linear-gradient(135deg,#a855f7,#ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '15px', color: 'white' }}>
-                {otherLetter}
-              </div>
-              {otherPresence?.online && (
-                <div style={{ position: 'absolute', bottom: '1px', right: '1px', width: '10px', height: '10px', borderRadius: '50%', background: '#25d366', border: '2px solid #1f2c34' }} />
-              )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 12px 8px' }}>
+          <button onClick={handleBack} aria-label="Back" style={{ ...ICON_BUTTON, ...HEADER_PILL }}>
+            <svg width="22" height="22" fill="none" stroke="var(--icon)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'linear-gradient(135deg,#a855f7,#ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '16px', color: 'white' }}>
+              {otherLetter}
             </div>
-            <div>
-              <div style={{ color: 'white', fontWeight: '600', fontSize: '15px', lineHeight: 1.2 }}>{otherName}</div>
-              <div style={{ color: otherPresence?.online ? '#25d366' : 'rgba(255,255,255,0.45)', fontSize: '12px' }}>{presenceText}</div>
-            </div>
+            {otherPresence?.online && (
+              <div style={{ position: 'absolute', bottom: '0', right: '0', width: '10px', height: '10px', borderRadius: '50%', background: 'var(--accent-green)', border: '2px solid var(--chat-bar)' }} />
+            )}
           </div>
-          <div style={{ display: 'flex' }}>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', opacity: otherPresence?.online ? 1 : 0.3 }}>
-              <svg width="20" height="20" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                <path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: 'var(--bubble-text)', fontWeight: 700, fontSize: '17px', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{otherName}</div>
+            <div style={{ color: otherPresence?.online ? 'var(--accent-green)' : 'var(--text-muted)', fontSize: '12px', lineHeight: 1.3 }}>{presenceText}</div>
+          </div>
+          <div style={{ ...HEADER_PILL, display: 'flex', flexShrink: 0, padding: '0 4px' }}>
+            <button aria-label="Video call" style={ICON_BUTTON} {...keepKeyboard(() => showComingSoon('Video calls'))}>
+              <svg width="26" height="26" fill="none" stroke="var(--icon)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
               </svg>
             </button>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', opacity: otherPresence?.online ? 1 : 0.3 }}>
-              <svg width="20" height="20" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+            <button aria-label="Voice call" style={ICON_BUTTON} {...keepKeyboard(() => showComingSoon('Voice calls'))}>
+              <svg width="22" height="22" fill="none" stroke="var(--icon)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
               </svg>
             </button>
           </div>
@@ -267,7 +296,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
       </div>
 
       {/* MESSAGES */}
-      <div ref={messagesBodyRef} className="chat-messages" style={{ padding: '8px 12px' }} onScroll={handleScroll}>
+      <div ref={messagesBodyRef} className="chat-messages" style={{ padding: '8px 14px' }} onScroll={handleScroll}>
         {grouped.map(item =>
           item.type === 'separator'
             ? <DateSeparator key={item.key} label={item.label} />
@@ -275,6 +304,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
                 key={item.key}
                 msg={item.msg}
                 isMine={item.msg.sender === currentUser}
+                isGroupEnd={item.isGroupEnd}
                 isRead={!!(reads[item.msg.id]?.[selectedChat])}
                 onMediaClick={setSnapViewer}
                 onReply={msg => { setReplyTo(msg); inputRef.current?.focus(); }}
@@ -285,7 +315,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
         )}
         {isOtherTyping && (
           <div style={{ display: 'flex', marginBottom: '4px' }}>
-            <div style={{ background: '#1f2c34', borderRadius: '12px 12px 12px 2px', padding: '12px 16px', display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <div style={{ background: 'var(--bubble-in)', borderRadius: '18px', padding: '12px 16px', display: 'flex', gap: '4px', alignItems: 'center' }}>
               {[0, 0.2, 0.4].map((d, i) => (
                 <span key={i} style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)', display: 'inline-block', animation: `bounce 1s ${d}s infinite` }} />
               ))}
@@ -299,9 +329,10 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
       {showScrollBtn && (
         <button
           onClick={() => scrollToBottom()}
+          aria-label="Scroll to latest message"
           style={{
             position: 'absolute', bottom: '80px', right: '16px',
-            background: '#1f2c34', border: '1px solid rgba(255,255,255,0.1)',
+            background: 'var(--bubble-in)', border: '1px solid var(--chat-pill-border)',
             borderRadius: '50%', width: '40px', height: '40px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', zIndex: 10,
@@ -313,52 +344,74 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
         </button>
       )}
 
-      {/* FOOTER */}
+      {/* "Coming soon" note for placeholder controls */}
+      {notice && (
+        <div role="status" style={{ position: 'absolute', left: '50%', bottom: '84px', transform: 'translateX(-50%)', background: 'var(--bubble-in)', color: 'var(--bubble-text)', fontSize: '13px', padding: '8px 14px', borderRadius: '999px', border: '1px solid var(--chat-pill-border)', whiteSpace: 'nowrap', zIndex: 20, pointerEvents: 'none' }}>
+          {notice}
+        </div>
+      )}
+
+      {/* FOOTER (WhatsApp layout: + · message field with sticker · camera · mic; send while typing) */}
       <div className="chat-footer">
         <ReplyBar replyTo={replyTo} onCancel={() => setReplyTo(null)} />
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', padding: '8px 10px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', padding: '6px 6px' }}>
           {/* Hidden file inputs */}
           <input type="file" ref={fileInputRef} onChange={e => { handleFileSelected(e.target.files[0]); e.target.value=''; }} accept="image/*,video/*" style={{ display: 'none' }} />
           <input type="file" ref={cameraInputRef} onChange={e => { handleFileSelected(e.target.files[0]); e.target.value=''; }} accept="image/*,video/*" capture="environment" style={{ display: 'none' }} />
 
-          {/* Camera button */}
-          <button onClick={() => cameraInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', marginBottom: '3px' }}>
-            <svg width="22" height="22" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-              <circle cx="12" cy="13" r="4"/>
-            </svg>
-          </button>
-
-          {/* Attachment button */}
-          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', marginBottom: '3px', opacity: uploading ? 0.5 : 1 }}>
+          {/* + : attach a photo or video */}
+          <button aria-label="Attach photo or video" onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ ...ICON_BUTTON, opacity: uploading ? 0.5 : 1 }}>
             {uploading
               ? <div style={{ width: '22px', height: '22px', border: '2px solid rgba(255,255,255,0.25)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-              : <svg width="22" height="22" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
-                </svg>
+              : <svg width="26" height="26" fill="none" stroke="var(--icon)" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></svg>
             }
           </button>
 
-          <div style={{ flex: 1, position: 'relative', minWidth: 0, display: 'flex' }}>
+          <div style={{ flex: 1, position: 'relative', minWidth: 0, display: 'flex', marginBottom: '5px' }}>
             {/* Return adds a new line (as in iMessage); messages are sent with the send button. */}
             <textarea
               ref={inputRef}
               rows={1} value={input} onChange={handleInputChange}
-              placeholder="Message"
-              style={{ flex: 1, minWidth: 0, display: 'block', background: '#2a3942', border: 'none', borderRadius: '20px', padding: '10px 16px', color: 'white', fontSize: '16px', lineHeight: `${INPUT_LINE_HEIGHT}px`, fontFamily: 'inherit', outline: 'none', resize: 'none', overflowY: 'auto', maxHeight: `${MAX_INPUT_HEIGHT}px` }}
+              aria-label="Message"
+              style={{ flex: 1, minWidth: 0, display: 'block', background: 'var(--input-field)', border: 'none', borderRadius: '18px', padding: `${INPUT_PADDING_Y}px 40px ${INPUT_PADDING_Y}px 14px`, color: 'var(--bubble-text)', fontSize: '16px', lineHeight: `${INPUT_LINE_HEIGHT}px`, fontFamily: 'inherit', outline: 'none', resize: 'none', overflowY: 'auto', maxHeight: `${MAX_INPUT_HEIGHT}px` }}
             />
             {/* Look-alike shown while useFocusWithoutScroll holds the real input off-screen. */}
             <div ref={inputStandInRef} aria-hidden="true"
-              style={{ visibility: 'hidden', position: 'absolute', inset: 0, background: '#2a3942', borderRadius: '20px', padding: '10px 16px', fontSize: '16px', lineHeight: `${INPUT_LINE_HEIGHT}px`, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'hidden', pointerEvents: 'none' }} />
+              style={{ visibility: 'hidden', position: 'absolute', inset: 0, background: 'var(--input-field)', borderRadius: '18px', padding: `${INPUT_PADDING_Y}px 40px ${INPUT_PADDING_Y}px 14px`, fontSize: '16px', lineHeight: `${INPUT_LINE_HEIGHT}px`, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'hidden', pointerEvents: 'none' }} />
+            {/* Sticker (placeholder) inside the field, bottom-right */}
+            <button aria-label="Stickers" {...keepKeyboard(() => showComingSoon('Stickers'))}
+              style={{ ...ICON_BUTTON, width: '40px', height: '34px', position: 'absolute', right: 0, bottom: 0 }}>
+              <svg width="22" height="22" fill="none" stroke="var(--icon)" strokeWidth="1.8" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M20 13V8a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v8a4 4 0 0 0 4 4h5z"/>
+                <path d="M20 13h-3a4 4 0 0 0-4 4v3"/>
+              </svg>
+            </button>
           </div>
-          <button onClick={handleSend} onTouchEnd={handleSendTouchEnd} onMouseDown={e => e.preventDefault()}
-            disabled={!input.trim()}
-            style={{ width: '40px', height: '40px', borderRadius: '50%', background: input.trim() ? '#00a884' : '#2a3942', border: 'none', cursor: input.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s', flexShrink: 0 }}>
-            <svg width="17" height="17" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-          </button>
+
+          {!hasText && (
+            <button aria-label="Camera" onClick={() => cameraInputRef.current?.click()} style={ICON_BUTTON}>
+              <svg width="27" height="27" fill="none" stroke="var(--icon)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </button>
+          )}
+
+          {hasText ? (
+            <button aria-label="Send" onClick={handleSend} onTouchEnd={handleSendTouchEnd} onMouseDown={e => e.preventDefault()} style={ICON_BUTTON}>
+              <span style={{ width: '33px', height: '33px', borderRadius: '50%', background: 'var(--accent-green)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="18" height="18" fill="#0b1a10" viewBox="0 0 24 24"><path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a1 1 0 00-1.39 1.17L4.5 12l-2.49 7.23a1 1 0 001.39 1.17z"/></svg>
+              </span>
+            </button>
+          ) : (
+            <button aria-label="Voice message" style={ICON_BUTTON} {...keepKeyboard(() => showComingSoon('Voice messages'))}>
+              <span style={{ width: '33px', height: '33px', borderRadius: '50%', background: 'var(--accent-green)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="20" height="20" fill="none" stroke="#0b1a10" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24">
+                  <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+                </svg>
+              </span>
+            </button>
+          )}
         </div>
       </div>
     </div>
