@@ -60,6 +60,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   const cameraInputRef = useRef(null);
   const typingTimer = useRef(null);
   const inputRef = useRef(null);
+  const screenRef = useRef(null);
 
   const {
     messages, reads, isOtherTyping, reactions,
@@ -67,7 +68,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
     deleteReadMessages, addReaction, removeReaction,
   } = useMessages(currentUser, selectedChat);
 
-  const keyboard = useKeyboardViewport();
+  const keyboardOpen = useKeyboardViewport(screenRef);
 
   const otherName = selectedChat === 'user1' ? 'Instance A' : 'Instance B';
   const otherLetter = selectedChat === 'user1' ? 'A' : 'B';
@@ -95,8 +96,8 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
 
   // The message list gets shorter when the keyboard opens; keep the latest message in view.
   useEffect(() => {
-    if (keyboard.open && !showScrollBtn) scrollToBottom(false);
-  }, [keyboard.open, keyboard.height]);
+    if (keyboardOpen && !showScrollBtn) scrollToBottom(false);
+  }, [keyboardOpen]);
 
   const handleScroll = () => {
     const el = messagesBodyRef.current;
@@ -180,10 +181,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   });
 
   return (
-    <div
-      className={`chat-screen${keyboard.open ? ' keyboard-open' : ''}`}
-      style={keyboard.open ? { height: `${keyboard.height}px`, transform: `translateY(${keyboard.offsetTop}px)` } : undefined}
-    >
+    <div ref={screenRef} className={`chat-screen${keyboardOpen ? ' keyboard-open' : ''}`}>
       <ViewportDebug />
       {snapViewer && <SnapViewer snap={snapViewer} onClose={() => setSnapViewer(null)} />}
 
