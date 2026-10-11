@@ -117,6 +117,7 @@ export function useFocusWithoutScroll(inputRef, standInRef) {
         standIn.textContent = el.value || el.placeholder;
         standIn.style.color = el.value ? 'white' : 'rgba(255,255,255,0.45)';
         standIn.style.visibility = 'visible';
+        standIn.scrollTop = el.scrollTop; // a long message shows the same lines as the real box
       }
       el.style.transform = 'translateY(-8000px)';
       el.focus();

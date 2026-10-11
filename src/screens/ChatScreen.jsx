@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useMessages } from '../hooks/useMessages';
 import { useKeyboardViewport, useFocusWithoutScroll } from '../hooks/useKeyboardViewport';
 import { processMedia } from '../services/mediaService';
@@ -44,6 +44,10 @@ const ReplyBar = ({ replyTo, onCancel }) => {
     </div>
   );
 };
+
+// Message box: 20px lines + 10px padding top and bottom; grows to 5 lines, then scrolls.
+const INPUT_LINE_HEIGHT = 20;
+const MAX_INPUT_HEIGHT = INPUT_LINE_HEIGHT * 5 + 20;
 
 const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   const [input, setInput] = useState('');
@@ -138,6 +142,14 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
     e.preventDefault(); // no synthesized mousedown/click, so focus stays in the message box
     handleSend();
   };
+
+  // Grow the message box with its text, up to MAX_INPUT_HEIGHT, then scroll inside it.
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, MAX_INPUT_HEIGHT)}px`;
+  }, [input]);
 
   const handleInputChange = e => {
     setInput(e.target.value);
@@ -304,13 +316,13 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
       {/* FOOTER */}
       <div className="chat-footer">
         <ReplyBar replyTo={replyTo} onCancel={() => setReplyTo(null)} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', padding: '8px 10px' }}>
           {/* Hidden file inputs */}
           <input type="file" ref={fileInputRef} onChange={e => { handleFileSelected(e.target.files[0]); e.target.value=''; }} accept="image/*,video/*" style={{ display: 'none' }} />
           <input type="file" ref={cameraInputRef} onChange={e => { handleFileSelected(e.target.files[0]); e.target.value=''; }} accept="image/*,video/*" capture="environment" style={{ display: 'none' }} />
 
           {/* Camera button */}
-          <button onClick={() => cameraInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex' }}>
+          <button onClick={() => cameraInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', marginBottom: '3px' }}>
             <svg width="22" height="22" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
               <circle cx="12" cy="13" r="4"/>
@@ -318,7 +330,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
           </button>
 
           {/* Attachment button */}
-          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', opacity: uploading ? 0.5 : 1 }}>
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', marginBottom: '3px', opacity: uploading ? 0.5 : 1 }}>
             {uploading
               ? <div style={{ width: '22px', height: '22px', border: '2px solid rgba(255,255,255,0.25)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
               : <svg width="22" height="22" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -328,16 +340,16 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
           </button>
 
           <div style={{ flex: 1, position: 'relative', minWidth: 0, display: 'flex' }}>
-            <input
+            {/* Return adds a new line (as in iMessage); messages are sent with the send button. */}
+            <textarea
               ref={inputRef}
-              type="text" value={input} onChange={handleInputChange}
-              onKeyPress={e => e.key === 'Enter' && handleSend()}
+              rows={1} value={input} onChange={handleInputChange}
               placeholder="Message"
-              style={{ flex: 1, minWidth: 0, background: '#2a3942', border: 'none', borderRadius: '24px', padding: '10px 16px', color: 'white', fontSize: '16px', outline: 'none' }}
+              style={{ flex: 1, minWidth: 0, display: 'block', background: '#2a3942', border: 'none', borderRadius: '20px', padding: '10px 16px', color: 'white', fontSize: '16px', lineHeight: `${INPUT_LINE_HEIGHT}px`, fontFamily: 'inherit', outline: 'none', resize: 'none', overflowY: 'auto', maxHeight: `${MAX_INPUT_HEIGHT}px` }}
             />
             {/* Look-alike shown while useFocusWithoutScroll holds the real input off-screen. */}
             <div ref={inputStandInRef} aria-hidden="true"
-              style={{ visibility: 'hidden', position: 'absolute', inset: 0, background: '#2a3942', borderRadius: '24px', padding: '10px 16px', fontSize: '16px', lineHeight: 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none', display: 'flex', alignItems: 'center' }} />
+              style={{ visibility: 'hidden', position: 'absolute', inset: 0, background: '#2a3942', borderRadius: '20px', padding: '10px 16px', fontSize: '16px', lineHeight: `${INPUT_LINE_HEIGHT}px`, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'hidden', pointerEvents: 'none' }} />
           </div>
           <button onClick={handleSend} onTouchEnd={handleSendTouchEnd} onMouseDown={e => e.preventDefault()}
             disabled={!input.trim()}

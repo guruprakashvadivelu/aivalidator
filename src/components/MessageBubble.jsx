@@ -135,7 +135,7 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, onMediaClick, onReply, 
       )}
       {msg.text && (
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px' }}>
-          <span style={{ color: 'rgba(255,255,255,0.92)', fontSize: '15px', lineHeight: '1.4', flex: '1 1 auto', wordBreak: 'break-word' }}>
+          <span style={{ color: 'rgba(255,255,255,0.92)', fontSize: '15px', lineHeight: '1.4', flex: '1 1 auto', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
             {msg.text}
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0, paddingBottom: '1px' }}>
