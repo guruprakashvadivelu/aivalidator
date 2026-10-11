@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMessages } from '../hooks/useMessages';
-import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
+import { useKeyboardViewport, useFocusWithoutScroll } from '../hooks/useKeyboardViewport';
 import { processMedia } from '../services/mediaService';
 import MessageBubble from '../components/MessageBubble';
 import SnapViewer from '../components/SnapViewer';
@@ -69,6 +69,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   } = useMessages(currentUser, selectedChat);
 
   const keyboardOpen = useKeyboardViewport(screenRef);
+  useFocusWithoutScroll(inputRef);
 
   const otherName = selectedChat === 'user1' ? 'Instance A' : 'Instance B';
   const otherLetter = selectedChat === 'user1' ? 'A' : 'B';

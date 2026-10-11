@@ -54,3 +54,34 @@ export function useKeyboardViewport(screenRef) {
 
   return open;
 }
+
+/**
+ * useFocusWithoutScroll
+ *
+ * Stops iOS from scrolling the page when the input in `inputRef` is tapped.
+ * iOS decides whether to scroll at the moment of focus, and animates that
+ * scroll on its own (the page only hears about it afterwards), so correcting
+ * it later always shows the header sliding away. iOS skips the scroll when the
+ * field is far off-screen as it's focused, so on touchstart move the field out
+ * of view, focus it, and put it back on the next frame: too fast to see.
+ *
+ * Only for taps on an unfocused field; once focused, iOS doesn't scroll again.
+ */
+export function useFocusWithoutScroll(inputRef) {
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+
+    const onTouchStart = e => {
+      if (document.activeElement === el) return;
+      e.preventDefault(); // focus ourselves below; the native tap focus would scroll
+      el.style.transform = 'translateY(-8000px)';
+      el.focus();
+      requestAnimationFrame(() => { el.style.transform = ''; });
+    };
+
+    // Not passive: preventDefault must be allowed.
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    return () => el.removeEventListener('touchstart', onTouchStart);
+  }, [inputRef]);
+}
