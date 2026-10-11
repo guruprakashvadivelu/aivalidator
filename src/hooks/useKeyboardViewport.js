@@ -23,7 +23,10 @@ export function useKeyboardViewport() {
     if (!vv) return;
 
     const update = () => {
-      const open = window.innerHeight - vv.height > KEYBOARD_THRESHOLD;
+      // Compare against the layout height. Don't use window.innerHeight: on iPhone it shrinks
+      // with the keyboard (measured: 456 with keyboard vs 793 layout), so the gap reads as 0.
+      const layoutHeight = document.documentElement.clientHeight;
+      const open = layoutHeight - vv.height > KEYBOARD_THRESHOLD;
       setViewport(prev => {
         const next = open
           ? { open, height: Math.round(vv.height), offsetTop: Math.round(vv.offsetTop) }
