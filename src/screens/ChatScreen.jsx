@@ -4,7 +4,6 @@ import { useKeyboardViewport, useFocusWithoutScroll } from '../hooks/useKeyboard
 import { processMedia } from '../services/mediaService';
 import MessageBubble from '../components/MessageBubble';
 import SnapViewer from '../components/SnapViewer';
-import ViewportDebug from '../components/ViewportDebug';
 
 // Date separator helper
 const getDateLabel = (timestamp) => {
@@ -129,6 +128,17 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
     await sendMessage(text, replyTo);
   };
 
+  // Tapping a button moves focus off the message box, and iOS closes the keyboard when the
+  // field loses focus. Send on touchend and cancel it, so the button never takes focus and the
+  // keyboard stays up for the next message. (A finger dragged off the button doesn't send.)
+  const handleSendTouchEnd = e => {
+    const t = e.changedTouches[0];
+    const r = e.currentTarget.getBoundingClientRect();
+    if (t.clientX < r.left || t.clientX > r.right || t.clientY < r.top || t.clientY > r.bottom) return;
+    e.preventDefault(); // no synthesized mousedown/click, so focus stays in the message box
+    handleSend();
+  };
+
   const handleInputChange = e => {
     setInput(e.target.value);
     setTypingStatus(true);
@@ -189,7 +199,6 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
 
   return (
     <div ref={screenRef} className={`chat-screen${keyboardOpen ? ' keyboard-open' : ''}`}>
-      <ViewportDebug />
       {snapViewer && <SnapViewer snap={snapViewer} onClose={() => setSnapViewer(null)} />}
 
       {/* Media Preview Modal */}
@@ -330,7 +339,8 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
             <div ref={inputStandInRef} aria-hidden="true"
               style={{ visibility: 'hidden', position: 'absolute', inset: 0, background: '#2a3942', borderRadius: '24px', padding: '10px 16px', fontSize: '16px', lineHeight: 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none', display: 'flex', alignItems: 'center' }} />
           </div>
-          <button onClick={handleSend} disabled={!input.trim()}
+          <button onClick={handleSend} onTouchEnd={handleSendTouchEnd} onMouseDown={e => e.preventDefault()}
+            disabled={!input.trim()}
             style={{ width: '40px', height: '40px', borderRadius: '50%', background: input.trim() ? '#00a884' : '#2a3942', border: 'none', cursor: input.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s', flexShrink: 0 }}>
             <svg width="17" height="17" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <line x1="22" y1="2" x2="11" y2="13"/>
