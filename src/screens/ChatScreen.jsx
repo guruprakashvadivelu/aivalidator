@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMessages } from '../hooks/useMessages';
+import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 import { processMedia } from '../services/mediaService';
 import MessageBubble from '../components/MessageBubble';
 import SnapViewer from '../components/SnapViewer';
@@ -65,6 +66,8 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
     deleteReadMessages, addReaction, removeReaction,
   } = useMessages(currentUser, selectedChat);
 
+  const keyboard = useKeyboardViewport();
+
   const otherName = selectedChat === 'user1' ? 'Instance A' : 'Instance B';
   const otherLetter = selectedChat === 'user1' ? 'A' : 'B';
   const otherPresence = presence[selectedChat];
@@ -88,6 +91,11 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   };
 
   useEffect(() => { scrollToBottom(); }, [messages]);
+
+  // The message list gets shorter when the keyboard opens; keep the latest message in view.
+  useEffect(() => {
+    if (keyboard.open && !showScrollBtn) scrollToBottom(false);
+  }, [keyboard.open, keyboard.height]);
 
   const handleScroll = () => {
     const el = messagesBodyRef.current;
@@ -171,7 +179,10 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   });
 
   return (
-    <div className="chat-screen">
+    <div
+      className={`chat-screen${keyboard.open ? ' keyboard-open' : ''}`}
+      style={keyboard.open ? { height: `${keyboard.height}px`, transform: `translateY(${keyboard.offsetTop}px)` } : undefined}
+    >
       {snapViewer && <SnapViewer snap={snapViewer} onClose={() => setSnapViewer(null)} />}
 
       {/* Media Preview Modal */}

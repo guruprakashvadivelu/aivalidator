@@ -105,6 +105,12 @@ input, textarea, select {
   z-index: 10;
 }
 
+/* Keyboard open: useKeyboardViewport pins .chat-screen to the visible area above
+   the keyboard. The keyboard covers the home bar, so drop its padding. */
+.chat-screen.keyboard-open .chat-footer {
+  padding-bottom: 0;
+}
+
 /* ============================================================
    OTHER SCREENS
    ============================================================ */
