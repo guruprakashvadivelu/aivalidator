@@ -4,6 +4,7 @@ import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 import { processMedia } from '../services/mediaService';
 import MessageBubble from '../components/MessageBubble';
 import SnapViewer from '../components/SnapViewer';
+import ViewportDebug from '../components/ViewportDebug';
 
 // Date separator helper
 const getDateLabel = (timestamp) => {
@@ -183,6 +184,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
       className={`chat-screen${keyboard.open ? ' keyboard-open' : ''}`}
       style={keyboard.open ? { height: `${keyboard.height}px`, transform: `translateY(${keyboard.offsetTop}px)` } : undefined}
     >
+      <ViewportDebug />
       {snapViewer && <SnapViewer snap={snapViewer} onClose={() => setSnapViewer(null)} />}
 
       {/* Media Preview Modal */}
