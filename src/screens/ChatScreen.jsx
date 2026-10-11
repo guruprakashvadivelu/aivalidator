@@ -107,6 +107,11 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   };
 
   const handleBack = async () => {
+    // With the keyboard open, the first tap only closes it; the next tap goes back.
+    if (keyboardOpen || document.activeElement === inputRef.current) {
+      inputRef.current?.blur();
+      return;
+    }
     await deleteReadMessages();
     setTypingStatus(false);
     onBack();
