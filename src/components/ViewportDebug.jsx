@@ -6,7 +6,7 @@ import React, { useEffect, useState } from 'react';
 const ENABLED = typeof location !== 'undefined' &&
   (location.hostname.startsWith('v2--') || location.hostname === 'localhost');
 
-const BUILD = 'A2 hold-until-keyboard #3'; // bump when redeploying, to confirm the phone runs this build
+const BUILD = 'close-on-blur #4'; // bump when redeploying, to confirm the phone runs this build
 const TIMELINE_MS = 1500;
 const MAX_ROWS = 28;
 
@@ -77,12 +77,20 @@ export default function ViewportDebug() {
       if (!t0 || performance.now() - t0 > TIMELINE_MS) { start(); raf = requestAnimationFrame(sample); }
       push('focus');
     };
+    // Keyboard closing: start a fresh timeline when the message box loses focus.
+    const onBlur = e => {
+      if (!isField(e.target)) return;
+      start();
+      push('blur');
+      raf = requestAnimationFrame(sample);
+    };
     const onWinScroll = () => { push('wscrl'); tick(); };
     const onVvResize = () => { push('vvres'); tick(); };
     const onVvScroll = () => { push('vvscr'); tick(); };
 
     document.addEventListener('touchstart', onTouch, { capture: true, passive: true });
     document.addEventListener('focusin', onFocus);
+    document.addEventListener('focusout', onBlur);
     window.addEventListener('scroll', onWinScroll);
     window.visualViewport?.addEventListener('resize', onVvResize);
     window.visualViewport?.addEventListener('scroll', onVvScroll);
@@ -91,6 +99,7 @@ export default function ViewportDebug() {
       cancelAnimationFrame(raf);
       document.removeEventListener('touchstart', onTouch, { capture: true });
       document.removeEventListener('focusin', onFocus);
+      document.removeEventListener('focusout', onBlur);
       window.removeEventListener('scroll', onWinScroll);
       window.visualViewport?.removeEventListener('resize', onVvResize);
       window.visualViewport?.removeEventListener('scroll', onVvScroll);
@@ -105,7 +114,7 @@ export default function ViewportDebug() {
       padding: '5px 7px', borderRadius: 6, whiteSpace: 'pre', overflow: 'hidden',
     }}>
       {'V2 DEBUG [' + BUILD + ']  ' + Object.entries(v).map(([k, val], i) => (i === 4 ? '\n' : '') + `${k}:${val}`).join(' ') +
-        (timeline.length ? '\n--- after tapping message box (ms) ---\n' + timeline.join('\n') : '\n(tap the message box to record a timeline)')}
+        (timeline.length ? '\n--- after last touch / blur (ms) ---\n' + timeline.join('\n') : '\n(tap the message box to record a timeline)')}
     </div>
   );
 }

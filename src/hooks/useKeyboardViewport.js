@@ -18,9 +18,18 @@ import { useState, useEffect } from 'react';
  * styles straight to the element in the event handler rather than waiting for
  * a React render, so the correction lands in the same frame as iOS's scroll.
  *
+ * Closing works the other way round: iOS reports the full-height viewport
+ * only ~425ms after the keyboard starts sliding away, so the footer would sit
+ * mid-screen over an empty gap. The keyboard is only up while a text field is
+ * focused, so treat it as closed the moment focus leaves the field.
+ *
  * Returns whether the keyboard is open.
  */
 const KEYBOARD_THRESHOLD = 120; // px of viewport loss that means a keyboard, not browser chrome
+
+const NON_TEXT_INPUTS = ['file', 'checkbox', 'radio', 'button', 'submit', 'range', 'color'];
+const isTextField = el => !!el && (el.tagName === 'TEXTAREA' || el.isContentEditable ||
+  (el.tagName === 'INPUT' && !NON_TEXT_INPUTS.includes(el.type)));
 
 export function useKeyboardViewport(screenRef) {
   const [open, setOpen] = useState(false);
@@ -32,7 +41,8 @@ export function useKeyboardViewport(screenRef) {
     const update = () => {
       // Compare against the layout height. Don't use window.innerHeight: on iPhone it shrinks
       // with the keyboard (measured: 456 with keyboard vs 793 layout), so the gap reads as 0.
-      const isOpen = document.documentElement.clientHeight - vv.height > KEYBOARD_THRESHOLD;
+      const isOpen = isTextField(document.activeElement) &&
+        document.documentElement.clientHeight - vv.height > KEYBOARD_THRESHOLD;
       const el = screenRef.current;
       if (el) {
         el.style.height = isOpen ? `${Math.round(vv.height)}px` : '';
@@ -41,14 +51,21 @@ export function useKeyboardViewport(screenRef) {
       setOpen(isOpen);
     };
 
+    // focusout fires before focus moves on, so re-check once activeElement has settled.
+    const onFocusChange = () => requestAnimationFrame(update);
+
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
     window.addEventListener('scroll', update);
+    document.addEventListener('focusin', onFocusChange);
+    document.addEventListener('focusout', onFocusChange);
     update();
     return () => {
       vv.removeEventListener('resize', update);
       vv.removeEventListener('scroll', update);
       window.removeEventListener('scroll', update);
+      document.removeEventListener('focusin', onFocusChange);
+      document.removeEventListener('focusout', onFocusChange);
     };
   }, [screenRef]);
 
