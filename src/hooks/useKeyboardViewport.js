@@ -59,29 +59,71 @@ export function useKeyboardViewport(screenRef) {
  * useFocusWithoutScroll
  *
  * Stops iOS from scrolling the page when the input in `inputRef` is tapped.
- * iOS decides whether to scroll at the moment of focus, and animates that
- * scroll on its own (the page only hears about it afterwards), so correcting
- * it later always shows the header sliding away. iOS skips the scroll when the
- * field is far off-screen as it's focused, so on touchstart move the field out
- * of view, focus it, and put it back on the next frame: too fast to see.
+ * iOS animates that scroll itself and only reports it afterwards, so
+ * correcting it later always shows the header sliding away.
+ *
+ * iOS decides whether to scroll when the keyboard appears (measured ~120ms
+ * after focus on iPhone 15 Pro), from where the focused field is at that
+ * moment, and skips the scroll if the field is far off-screen. So on
+ * touchstart: move the field out of view, focus it, and keep it there until
+ * the keyboard is up plus a frame. By then useKeyboardViewport has sized the
+ * screen to sit above the keyboard, so the field comes back already visible
+ * and iOS has nothing to scroll to. While it's away, `standInRef` (a look-alike
+ * box in the same spot) is shown so nothing visibly disappears.
  *
  * Only for taps on an unfocused field; once focused, iOS doesn't scroll again.
  */
-export function useFocusWithoutScroll(inputRef) {
+const KEYBOARD_WAIT_MS = 600; // put the field back even if the keyboard never shows
+
+export function useFocusWithoutScroll(inputRef, standInRef) {
   useEffect(() => {
     const el = inputRef.current;
-    if (!el) return;
+    const vv = window.visualViewport;
+    if (!el || !vv) return;
+
+    let pending = null; // cleanup for an in-flight focus
+
+    const restore = () => {
+      if (!pending) return;
+      pending();
+      pending = null;
+      el.style.transform = '';
+      if (standInRef.current) standInRef.current.style.visibility = 'hidden';
+    };
 
     const onTouchStart = e => {
-      if (document.activeElement === el) return;
+      if (document.activeElement === el || pending) return;
       e.preventDefault(); // focus ourselves below; the native tap focus would scroll
+
+      const standIn = standInRef.current;
+      if (standIn) {
+        standIn.textContent = el.value || el.placeholder;
+        standIn.style.color = el.value ? 'white' : 'rgba(255,255,255,0.45)';
+        standIn.style.visibility = 'visible';
+      }
       el.style.transform = 'translateY(-8000px)';
       el.focus();
-      requestAnimationFrame(() => { el.style.transform = ''; });
+
+      const onResize = () => {
+        if (document.documentElement.clientHeight - vv.height > KEYBOARD_THRESHOLD) {
+          requestAnimationFrame(restore); // after useKeyboardViewport has resized the screen
+        }
+      };
+      vv.addEventListener('resize', onResize);
+      el.addEventListener('blur', restore);
+      const timer = setTimeout(restore, KEYBOARD_WAIT_MS);
+      pending = () => {
+        vv.removeEventListener('resize', onResize);
+        el.removeEventListener('blur', restore);
+        clearTimeout(timer);
+      };
     };
 
     // Not passive: preventDefault must be allowed.
     el.addEventListener('touchstart', onTouchStart, { passive: false });
-    return () => el.removeEventListener('touchstart', onTouchStart);
-  }, [inputRef]);
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      restore();
+    };
+  }, [inputRef, standInRef]);
 }

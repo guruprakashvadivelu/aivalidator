@@ -61,6 +61,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   const typingTimer = useRef(null);
   const inputRef = useRef(null);
   const screenRef = useRef(null);
+  const inputStandInRef = useRef(null);
 
   const {
     messages, reads, isOtherTyping, reactions,
@@ -69,7 +70,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   } = useMessages(currentUser, selectedChat);
 
   const keyboardOpen = useKeyboardViewport(screenRef);
-  useFocusWithoutScroll(inputRef);
+  useFocusWithoutScroll(inputRef, inputStandInRef);
 
   const otherName = selectedChat === 'user1' ? 'Instance A' : 'Instance B';
   const otherLetter = selectedChat === 'user1' ? 'A' : 'B';
@@ -317,13 +318,18 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
             }
           </button>
 
-          <input
-            ref={inputRef}
-            type="text" value={input} onChange={handleInputChange}
-            onKeyPress={e => e.key === 'Enter' && handleSend()}
-            placeholder="Message"
-            style={{ flex: 1, background: '#2a3942', border: 'none', borderRadius: '24px', padding: '10px 16px', color: 'white', fontSize: '16px', outline: 'none' }}
-          />
+          <div style={{ flex: 1, position: 'relative', minWidth: 0, display: 'flex' }}>
+            <input
+              ref={inputRef}
+              type="text" value={input} onChange={handleInputChange}
+              onKeyPress={e => e.key === 'Enter' && handleSend()}
+              placeholder="Message"
+              style={{ flex: 1, minWidth: 0, background: '#2a3942', border: 'none', borderRadius: '24px', padding: '10px 16px', color: 'white', fontSize: '16px', outline: 'none' }}
+            />
+            {/* Look-alike shown while useFocusWithoutScroll holds the real input off-screen. */}
+            <div ref={inputStandInRef} aria-hidden="true"
+              style={{ visibility: 'hidden', position: 'absolute', inset: 0, background: '#2a3942', borderRadius: '24px', padding: '10px 16px', fontSize: '16px', lineHeight: 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none', display: 'flex', alignItems: 'center' }} />
+          </div>
           <button onClick={handleSend} disabled={!input.trim()}
             style={{ width: '40px', height: '40px', borderRadius: '50%', background: input.trim() ? '#00a884' : '#2a3942', border: 'none', cursor: input.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s', flexShrink: 0 }}>
             <svg width="17" height="17" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">

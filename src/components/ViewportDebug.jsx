@@ -6,7 +6,7 @@ import React, { useEffect, useState } from 'react';
 const ENABLED = typeof location !== 'undefined' &&
   (location.hostname.startsWith('v2--') || location.hostname === 'localhost');
 
-const BUILD = 'A-touchstart #2'; // bump when redeploying, to confirm the phone runs this build
+const BUILD = 'A2 hold-until-keyboard #3'; // bump when redeploying, to confirm the phone runs this build
 const TIMELINE_MS = 1500;
 const MAX_ROWS = 28;
 
