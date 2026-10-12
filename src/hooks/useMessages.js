@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ref, onValue, push, set, remove, update } from 'firebase/database';
 import { db } from '../firebase/config';
+import { saveVoiceMessage, loadVoiceUrl, markPlayed, voicePaths } from '../services/voiceService';
+import { shouldDelete } from '../voice/retention';
 
 export function useMessages(currentUser, selectedChat) {
   const [messages, setMessages] = useState([]);
   const [reads, setReads] = useState({});
   const [typing, setTyping] = useState({});
   const [reactions, setReactions] = useState({});
+  const [played, setPlayed] = useState({});
   const prevCountRef = useRef(0);
   const deletionMode = localStorage.getItem('deleteMode') || 'after_read';
 
@@ -30,7 +33,8 @@ export function useMessages(currentUser, selectedChat) {
     const u2 = onValue(ref(db, 'reads'), snap => setReads(snap.val() || {}));
     const u3 = onValue(ref(db, 'typing'), snap => setTyping(snap.val() || {}));
     const u4 = onValue(ref(db, 'reactions'), snap => setReactions(snap.val() || {}));
-    return () => { u1(); u2(); u3(); u4(); };
+    const u5 = onValue(ref(db, 'played'), snap => setPlayed(snap.val() || {}));
+    return () => { u1(); u2(); u3(); u4(); u5(); };
   }, [currentUser]);
 
   // Play subtle notification sound
@@ -64,15 +68,20 @@ export function useMessages(currentUser, selectedChat) {
     }
   }, [messages, currentUser, reads]);
 
+  // A message's own entry plus everything keyed by it (reads, reactions, voice audio, played).
+  const removeMessage = async id => {
+    for (const path of [`messages/${id}`, `reads/${id}`, `reactions/${id}`, ...voicePaths(id)]) {
+      await remove(ref(db, path));
+    }
+  };
+
   // 24h expiry
   useEffect(() => {
     if (deletionMode !== 'after_24h') return;
     const now = Date.now();
     messages.forEach(async msg => {
       if (msg.timestamp && now - msg.timestamp > 86400000) {
-        await remove(ref(db, `messages/${msg.id}`));
-        await remove(ref(db, `reads/${msg.id}`));
-        await remove(ref(db, `reactions/${msg.id}`));
+        await removeMessage(msg.id);
       }
     });
   }, [messages, deletionMode]);
@@ -80,16 +89,10 @@ export function useMessages(currentUser, selectedChat) {
   const deleteReadMessages = useCallback(async () => {
     if (deletionMode !== 'after_read') return;
     const toDelete = messages.filter(msg =>
-      msg.sender !== currentUser
-        ? reads[msg.id]?.[currentUser]
-        : reads[msg.id]?.[selectedChat]
+      shouldDelete(msg, { reads, played, me: currentUser, other: selectedChat })
     );
-    for (const msg of toDelete) {
-      await remove(ref(db, `messages/${msg.id}`));
-      await remove(ref(db, `reads/${msg.id}`));
-      await remove(ref(db, `reactions/${msg.id}`));
-    }
-  }, [messages, reads, currentUser, selectedChat, deletionMode]);
+    for (const msg of toDelete) await removeMessage(msg.id);
+  }, [messages, reads, played, currentUser, selectedChat, deletionMode]);
 
   const sendMessage = useCallback(async (text, replyTo = null) => {
     if (!text.trim()) return;
@@ -103,7 +106,7 @@ export function useMessages(currentUser, selectedChat) {
       msg.replyTo = {
         id: replyTo.id,
         text: replyTo.text || '',
-        mediaType: replyTo.mediaType || null,
+        mediaType: replyTo.mediaType || (replyTo.type === 'voice' ? 'voice' : null),
         sender: replyTo.sender,
       };
     }
@@ -132,13 +135,21 @@ export function useMessages(currentUser, selectedChat) {
     await remove(ref(db, `reactions/${msgId}/${currentUser}`));
   }, [currentUser]);
 
+  const sendVoice = useCallback(
+    rec => saveVoiceMessage(db, { ...rec, sender: currentUser }),
+    [currentUser]
+  );
+  const loadVoice = useCallback(id => loadVoiceUrl(db, id), []);
+  const markVoicePlayed = useCallback(id => markPlayed(db, id, currentUser), [currentUser]);
+
   // Unread count - messages from other user not yet read by me
   const unreadCount = messages.filter(msg =>
     msg.sender !== currentUser && !reads[msg.id]?.[currentUser]
   ).length;
 
   return {
-    messages, reads, typing, reactions,
+    messages, reads, typing, reactions, played,
+    sendVoice, loadVoice, markVoicePlayed,
     sendMessage, sendMedia, setTypingStatus,
     deleteReadMessages, addReaction, removeReaction,
     isOtherTyping: !!typing[selectedChat],

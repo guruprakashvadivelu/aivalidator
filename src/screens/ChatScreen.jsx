@@ -33,7 +33,7 @@ const ReplyBar = ({ replyTo, onCancel }) => {
           {replyTo.sender === 'user1' ? 'Instance A' : 'Instance B'}
         </div>
         <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {replyTo.mediaType ? `📎 ${replyTo.mediaType}` : replyTo.text}
+          {replyTo.type === 'voice' ? '🎤 Voice message' : replyTo.mediaType ? `📎 ${replyTo.mediaType}` : replyTo.text}
         </div>
       </div>
       <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'rgba(255,255,255,0.5)' }}>

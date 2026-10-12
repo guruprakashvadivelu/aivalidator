@@ -47,6 +47,7 @@ const ChatListScreen = ({ currentUser, presence, onSelectChat, onLogout, onSetti
 
   const formatLastMsg = (msg) => {
     if (!msg) return '';
+    if (msg.type === 'voice') return '🎤 Voice message';
     if (msg.mediaType === 'image' || msg.mediaData) return '📷 Photo';
     if (msg.mediaType === 'video') return '🎥 Video';
     return msg.text || '';
