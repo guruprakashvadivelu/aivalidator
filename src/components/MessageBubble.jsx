@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import VoiceBubble from './VoiceBubble';
 import MessageActions from './MessageActions';
 import { linkify } from '../utils/linkify';
+import LinkPreviewCard from './LinkPreviewCard';
 
 
 const Ticks = ({ isRead }) => (
@@ -165,6 +166,7 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, voiceListen
           </div>
         </>
       )}
+      {msg.preview && msg.text && <LinkPreviewCard preview={msg.preview} variant="bubble" />}
       {msg.text && (
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px' }}>
           <span style={{ color: 'var(--bubble-text)', fontSize: '14px', lineHeight: '20px', flex: '1 1 auto', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>

@@ -4,6 +4,8 @@ import { useKeyboardViewport, useFocusWithoutScroll } from '../hooks/useKeyboard
 import { processMedia } from '../services/mediaService';
 import MessageBubble from '../components/MessageBubble';
 import VoiceRecorderBar from '../components/VoiceRecorderBar';
+import LinkPreviewCard from '../components/LinkPreviewCard';
+import { useLinkPreview } from '../linkPreview/useLinkPreview';
 import SnapViewer from '../components/SnapViewer';
 
 // Date separator helper
@@ -93,6 +95,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   };
   const showComingSoon = feature => showNotice(`${feature} — coming soon`);
   const hasText = !!input.trim();
+  const { preview: linkPreview, dismiss: dismissLinkPreview } = useLinkPreview(input);
   // While a voice note is recording, keep the recorder mounted and the message box read-only,
   // so a stray keystroke can't swap the mic for Send and discard the recording.
   const [voiceActive, setVoiceActive] = useState(false);
@@ -160,7 +163,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
     setReplyTo(null);
     setTypingStatus(false);
     clearTimeout(typingTimer.current);
-    await sendMessage(text, replyTo);
+    await sendMessage(text, replyTo, linkPreview);
   };
 
   // Tapping a button moves focus off the message box, and iOS closes the keyboard when the
@@ -365,6 +368,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
       {/* FOOTER (WhatsApp layout: + · message field with sticker · camera · mic; send while typing) */}
       <div className="chat-footer">
         <ReplyBar replyTo={replyTo} onCancel={() => setReplyTo(null)} />
+        {linkPreview && <LinkPreviewCard preview={linkPreview} variant="compose" onDismiss={dismissLinkPreview} />}
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', padding: '6px 6px', position: 'relative' }}>
           {/* Hidden file inputs */}
           <input type="file" ref={fileInputRef} onChange={e => { handleFileSelected(e.target.files[0]); e.target.value=''; }} accept="image/*,video/*" style={{ display: 'none' }} />
