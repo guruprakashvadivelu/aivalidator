@@ -1,6 +1,9 @@
 import { lookup } from 'node:dns/promises';
 import { checkUrl, isIpLiteral, isPrivateAddress } from '../../src/linkPreview/guard.js';
 import { parseMeta } from '../../src/linkPreview/parseMeta.js';
+import { allowedRequest } from '../../src/server/origin.js';
+
+export { allowedRequest };
 
 // GET /.netlify/functions/link-preview?url=… → { url, title?, description?, image?, siteName? }
 // Fetches public pages only (see guard.js), identifies itself honestly, and reads at most 1 MB.
@@ -10,15 +13,6 @@ const TIMEOUT_MS = 5000;
 const MAX_REDIRECTS = 3;
 // Sites like Instagram send server requests to a login page; that page is not a preview of the link.
 const LOGIN_WALL = /\/(accounts\/)?(log-?in|sign-?in)\b/i;
-const ALLOWED_ORIGIN = /^(https:\/\/([a-z0-9-]+--)?myaivalidator\.netlify\.app|http:\/\/localhost(:\d+)?)$/;
-
-// Deters reuse by other sites (not authentication: headers can be forged outside a browser).
-export function allowedRequest(headers) {
-  const origin = headers.get('origin');
-  if (origin) return ALLOWED_ORIGIN.test(origin);
-  return headers.get('sec-fetch-site') === 'same-origin';
-}
-
 async function resolvesPublic(hostname, lookupFn) {
   const host = hostname.replace(/^\[|\]$/g, '');
   if (isIpLiteral(host)) return !isPrivateAddress(host);
