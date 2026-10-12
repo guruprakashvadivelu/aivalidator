@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 /**
  * useKeyboardViewport
@@ -89,10 +89,13 @@ export function useKeyboardViewport(screenRef) {
  * box in the same spot) is shown so nothing visibly disappears.
  *
  * Only for taps on an unfocused field; once focused, iOS doesn't scroll again.
+ * Returns focusField(): the same no-scroll focus for code paths like Reply (call it from a tap).
  */
 const KEYBOARD_WAIT_MS = 600; // put the field back even if the keyboard never shows
 
 export function useFocusWithoutScroll(inputRef, standInRef) {
+  const beginRef = useRef(() => inputRef.current?.focus());
+
   useEffect(() => {
     const el = inputRef.current;
     const vv = window.visualViewport;
@@ -108,9 +111,8 @@ export function useFocusWithoutScroll(inputRef, standInRef) {
       if (standInRef.current) standInRef.current.style.visibility = 'hidden';
     };
 
-    const onTouchStart = e => {
+    const begin = () => {
       if (document.activeElement === el || pending) return;
-      e.preventDefault(); // focus ourselves below; the native tap focus would scroll
 
       const standIn = standInRef.current;
       if (standIn) {
@@ -137,6 +139,12 @@ export function useFocusWithoutScroll(inputRef, standInRef) {
       };
     };
 
+    beginRef.current = begin;
+    const onTouchStart = e => {
+      if (document.activeElement === el || pending) return;
+      e.preventDefault(); // focus ourselves; the native tap focus would scroll
+      begin();
+    };
     // Not passive: preventDefault must be allowed.
     el.addEventListener('touchstart', onTouchStart, { passive: false });
     return () => {
@@ -144,4 +152,6 @@ export function useFocusWithoutScroll(inputRef, standInRef) {
       restore();
     };
   }, [inputRef, standInRef]);
+
+  return useCallback(() => beginRef.current(), []);
 }

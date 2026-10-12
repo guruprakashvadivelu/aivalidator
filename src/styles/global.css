@@ -99,6 +99,13 @@ input, textarea, select {
   z-index: 10;
 }
 
+.chat-header,
+.chat-messages {
+  /* Long press opens the message menu; don't let iOS select text across the screen */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .chat-messages {
   /* Takes all remaining space between header and footer */
   flex: 1 1 0;

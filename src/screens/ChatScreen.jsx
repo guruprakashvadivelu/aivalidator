@@ -104,7 +104,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   } = useMessages(currentUser, selectedChat);
 
   const keyboardOpen = useKeyboardViewport(screenRef);
-  useFocusWithoutScroll(inputRef, inputStandInRef);
+  const focusMessageBox = useFocusWithoutScroll(inputRef, inputStandInRef);
 
   const otherName = selectedChat === 'user1' ? 'Instance A' : 'Instance B';
   const otherLetter = selectedChat === 'user1' ? 'A' : 'B';
@@ -315,7 +315,10 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
                 onVoicePlayed={markVoicePlayed}
                 isRead={!!(reads[item.msg.id]?.[selectedChat])}
                 onMediaClick={setSnapViewer}
-                onReply={msg => { setReplyTo(msg); inputRef.current?.focus(); }}
+                onReply={msg => { setReplyTo(msg); focusMessageBox(); }}
+                onCopy={msg => navigator.clipboard.writeText(msg.text)
+                  .then(() => showNotice('Copied'))
+                  .catch(() => showNotice("Couldn't copy"))}
                 reactions={reactions}
                 currentUser={currentUser}
                 onReact={handleReact}

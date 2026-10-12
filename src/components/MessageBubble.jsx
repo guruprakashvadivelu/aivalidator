@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import VoiceBubble from './VoiceBubble';
+import MessageActions from './MessageActions';
 
-const EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🙏'];
 
 const Ticks = ({ isRead }) => (
   <svg width="16" height="11" viewBox="0 0 16 11" fill="none" style={{ flexShrink: 0 }}>
@@ -38,7 +38,7 @@ const ReactionsDisplay = ({ reactions, currentUser, onReact, msgId }) => {
     grouped[emoji].push(user);
   });
   return (
-    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
+    <div data-reactions="" style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
       {Object.entries(grouped).map(([emoji, users]) => (
         <button key={emoji} onClick={() => onReact(msgId, emoji)} style={{
           background: 'var(--bubble-in)',
@@ -53,29 +53,6 @@ const ReactionsDisplay = ({ reactions, currentUser, onReact, msgId }) => {
   );
 };
 
-const EmojiPicker = ({ onSelect, onClose, isMine }) => (
-  <>
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50 }} />
-    <div style={{
-      position: 'absolute',
-      [isMine ? 'right' : 'left']: 0,
-      bottom: 'calc(100% + 6px)',
-      background: 'var(--bubble-in)',
-      borderRadius: '999px',
-      padding: '8px 12px',
-      display: 'flex', gap: '8px',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-      zIndex: 51,
-    }}>
-      {EMOJIS.map(e => (
-        <button key={e} onClick={() => onSelect(e)} style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', padding: '2px', lineHeight: 1 }}>
-          {e}
-        </button>
-      ))}
-    </div>
-  </>
-);
-
 // WhatsApp-style tail on the last bubble of a group: a small curved flick at the bottom corner.
 // Drawn for the left (incoming) side and mirrored for outgoing.
 const BubbleTail = ({ isMine }) => (
@@ -89,10 +66,12 @@ const BubbleTail = ({ isMine }) => (
 
 const BUBBLE_RADIUS = '18px';
 
-const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, voiceListened, loadVoice, onVoicePlayed, onMediaClick, onReply, reactions, currentUser, onReact }) => {
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, voiceListened, loadVoice, onVoicePlayed, onMediaClick, onReply, onCopy, reactions, currentUser, onReact }) => {
+  const [showActions, setShowActions] = useState(false);
   const longPressTimer = useRef(null);
   const swipeStartX = useRef(null);
+  const swipeStartY = useRef(null);
+  const wrapperRef = useRef(null);
   const didLongPress = useRef(false);
 
   const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -101,19 +80,21 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, voiceListen
   // Long press detection
   const handleTouchStart = useCallback((e) => {
     swipeStartX.current = e.touches[0].clientX;
+    swipeStartY.current = e.touches[0].clientY;
     didLongPress.current = false;
     longPressTimer.current = setTimeout(() => {
       didLongPress.current = true;
-      setShowEmojiPicker(true);
-      // Haptic feedback if available
-      if (navigator.vibrate) navigator.vibrate(50);
+      // Centre the message so the reaction bar above and the menu below both fit.
+      wrapperRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      setShowActions(true);
     }, 500);
   }, []);
 
   const handleTouchMove = useCallback((e) => {
-    const delta = Math.abs(e.touches[0].clientX - swipeStartX.current);
-    if (delta > 10) {
-      // User is swiping, cancel long press
+    const dx = Math.abs(e.touches[0].clientX - swipeStartX.current);
+    const dy = Math.abs(e.touches[0].clientY - swipeStartY.current);
+    if (dx > 10 || dy > 10) {
+      // Swiping or scrolling, not a long press
       clearTimeout(longPressTimer.current);
     }
   }, []);
@@ -127,8 +108,28 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, voiceListen
 
   const handleReact = useCallback((emoji) => {
     onReact(msg.id, emoji);
-    setShowEmojiPicker(false);
+    setShowActions(false);
   }, [msg.id, onReact]);
+
+  const actions = showActions && (
+    <MessageActions
+      isMine={isMine}
+      myReaction={msgReactions?.[currentUser]}
+      canCopy={!!msg.text}
+      onReact={handleReact}
+      onReply={() => { setShowActions(false); onReply(msg); }}
+      onCopy={() => { setShowActions(false); onCopy(msg); }}
+      onClose={() => setShowActions(false)}
+    />
+  );
+  // Raised above the actions backdrop while the menu is open (see MessageActions).
+  const raised = showActions ? { zIndex: 60 } : null;
+  const longPressProps = {
+    onTouchStart: handleTouchStart,
+    onTouchMove: handleTouchMove,
+    onTouchEnd: handleTouchEnd,
+    onContextMenu: e => e.preventDefault(),
+  };
 
   const bubbleContent = (
     <div style={{
@@ -181,12 +182,8 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, voiceListen
   // Pure snap (image/video no text)
   if (msg.mediaData || msg.mediaUrl && !msg.text) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: isGroupEnd ? '12px' : '5px', position: 'relative' }}>
-        <div
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        >
+      <div ref={wrapperRef} data-msg-id={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: isGroupEnd ? '12px' : '5px', position: 'relative', ...raised }}>
+        <div data-bubble="" style={{ position: 'relative' }} {...longPressProps}>
           <div onClick={() => onMediaClick(msg)} style={{
             position: 'relative', cursor: 'pointer',
             borderRadius: BUBBLE_RADIUS,
@@ -206,25 +203,20 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, voiceListen
               {isMine && <Ticks isRead={isRead} />}
             </div>
           </div>
+          {actions}
         </div>
-        <ReactionsDisplay reactions={msgReactions} msgId={msg.id} currentUser={currentUser} onReact={handleReact} />
-        {showEmojiPicker && <EmojiPicker onSelect={handleReact} onClose={() => setShowEmojiPicker(false)} isMine={isMine} />}
+        <ReactionsDisplay reactions={msgReactions} msgId={msg.id} currentUser={currentUser} onReact={(id, emoji) => handleReact(emoji)} />
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: isGroupEnd ? '12px' : '5px', position: 'relative' }}>
-      <div
-        style={{ maxWidth: '80%', position: 'relative' }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
+    <div ref={wrapperRef} data-msg-id={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: isGroupEnd ? '12px' : '5px', position: 'relative', ...raised }}>
+      <div data-bubble="" style={{ maxWidth: '80%', position: 'relative' }} {...longPressProps}>
         {bubbleContent}
-        {showEmojiPicker && <EmojiPicker onSelect={handleReact} onClose={() => setShowEmojiPicker(false)} isMine={isMine} />}
+        {actions}
       </div>
-      <ReactionsDisplay reactions={msgReactions} msgId={msg.id} currentUser={currentUser} onReact={handleReact} />
+      <ReactionsDisplay reactions={msgReactions} msgId={msg.id} currentUser={currentUser} onReact={(id, emoji) => handleReact(emoji)} />
     </div>
   );
 }, (prev, next) =>
