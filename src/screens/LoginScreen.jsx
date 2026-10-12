@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 
 const PASSCODE = 'Azure@12345';
 
@@ -31,6 +32,13 @@ const LoginScreen = ({ onLogin }) => {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const inputRef = useRef(null);
+  const screenRef = useRef(null);
+  // With the keyboard up, fit the screen above it and keep the newest line in view, like a terminal.
+  const keyboardOpen = useKeyboardViewport(screenRef);
+  useEffect(() => {
+    const el = screenRef.current;
+    if (el && user) el.scrollTop = el.scrollHeight;
+  }, [keyboardOpen, user, log, busy]);
 
   useEffect(() => {
     if (booted >= BOOT_LINES.length) return undefined;
@@ -69,7 +77,8 @@ const LoginScreen = ({ onLogin }) => {
 
   const bootDone = booted >= BOOT_LINES.length;
   return (
-    <div className="login-screen" onClick={() => { if (user && !done) inputRef.current?.focus(); }}>
+    <div ref={screenRef} className={`login-screen${keyboardOpen ? ' keyboard-open' : ''}`}
+      onClick={() => { if (user && !done) inputRef.current?.focus(); }}>
       <div className="term">
         {BOOT_LINES.slice(0, booted).map((parts, i) => <Line key={i} parts={parts} />)}
         {bootDone && (
@@ -85,15 +94,21 @@ const LoginScreen = ({ onLogin }) => {
               </button>
             ))}
             {log.map((parts, i) => <Line key={i} parts={parts} />)}
-            {user && !done && <div>{prompt[0][1]}{!busy && <Cursor />}</div>}
+            {/* The current prompt line. The token is typed into an invisible field laid over it, so
+                iOS opens the keyboard right below the prompt and nothing is echoed. A plain text field,
+                not a password one, so iOS doesn't pop up its Passwords banner. Rendered before an
+                instance is picked so the tap can focus it straight away. */}
+            <div className="term-line">
+              {user && !done && <>{prompt[0][1]}{!busy && <Cursor />}</>}
+              <input ref={inputRef} className="term-input" type="text" value={token} aria-label="Token"
+                name="airv-session" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                enterKeyHint="go" tabIndex={user && !done ? 0 : -1}
+                onChange={e => setToken(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }} />
+            </div>
           </>
         )}
       </div>
-      {/* The token is typed into this invisible field; nothing is echoed, like a CLI password prompt. */}
-      <input ref={inputRef} className="term-input" type="password" value={token} aria-label="Token"
-        autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="go"
-        onChange={e => setToken(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }} />
     </div>
   );
 };
