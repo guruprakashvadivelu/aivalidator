@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { useCallActions } from '../calls/useCall';
 import { useMessages } from '../hooks/useMessages';
 import { useKeyboardViewport, useFocusWithoutScroll } from '../hooks/useKeyboardViewport';
 import { processMedia } from '../services/mediaService';
@@ -93,6 +94,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
     clearTimeout(noticeTimer.current);
     noticeTimer.current = setTimeout(() => setNotice(null), ms);
   };
+  const callActions = useCallActions();
   const showComingSoon = feature => showNotice(`${feature} — coming soon`);
   const hasText = !!input.trim();
   const { preview: linkPreview, dismiss: dismissLinkPreview } = useLinkPreview(input);
@@ -289,12 +291,12 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
             <div style={{ color: otherPresence?.online ? 'var(--accent-green)' : 'var(--text-muted)', fontSize: '12px', lineHeight: 1.3 }}>{presenceText}</div>
           </div>
           <div style={{ ...HEADER_PILL, display: 'flex', flexShrink: 0, padding: '0 4px' }}>
-            <button aria-label="Video call" style={ICON_BUTTON} {...keepKeyboard(() => showComingSoon('Video calls'))}>
+            <button aria-label="Video call" style={ICON_BUTTON} {...keepKeyboard(() => (callActions ? callActions.startCall('video') : showComingSoon('Video calls')))}>
               <svg width="26" height="26" fill="none" stroke="var(--icon)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                 <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
               </svg>
             </button>
-            <button aria-label="Voice call" style={ICON_BUTTON} {...keepKeyboard(() => showComingSoon('Voice calls'))}>
+            <button aria-label="Voice call" style={ICON_BUTTON} {...keepKeyboard(() => (callActions ? callActions.startCall('audio') : showComingSoon('Voice calls')))}>
               <svg width="22" height="22" fill="none" stroke="var(--icon)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                 <path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
               </svg>
