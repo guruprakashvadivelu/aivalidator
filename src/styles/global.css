@@ -181,14 +181,58 @@ input, textarea, select {
   min-height: 0;
 }
 
-/* Login: scrollable so keyboard doesn't destroy it */
+/* Login: a command-line look; scrollable so the keyboard doesn't destroy it */
 .login-screen {
   height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+  background: #0c0c0c;
+  color: #c8c8c8;
+  font: 12.5px/1.6 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  -webkit-font-smoothing: antialiased;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.login-screen .term {
+  padding: 18px 14px 40px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.login-screen .term-option {
+  display: block;
+  width: 100%;
+  padding: 7px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.login-screen .term-option:active { background: #1f1f1f; }
+.login-screen .term-cursor {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.1em;
+  background: #c8c8c8;
+  vertical-align: -0.2em;
+  animation: term-blink 1.05s steps(1) infinite;
+}
+@keyframes term-blink { 50% { opacity: 0; } }
+/* Invisible but focusable (16px so iOS doesn't zoom); kept inside the screen so focusing it doesn't scroll sideways. */
+.login-screen .term-input {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px;
 }
 
 /* Snap viewer */

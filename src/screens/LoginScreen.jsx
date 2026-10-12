@@ -1,127 +1,99 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 const PASSCODE = 'Azure@12345';
 
-const LoginScreen = ({ onLogin }) => {
-  const [user, setUser] = useState('');
-  const [pass, setPass] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+// Looks like a command-line tool: boot log, tap an instance, then a hidden token prompt.
+const BOOT_LINES = [
+  [['b', 'airv-cli'], ['dim', ' v2.4.1 (build 7f3c9e2, linux/arm64)']],
+  [['dim', `Last login: ${new Date().toUTCString().replace(' GMT', ' UTC')} on ttys004`]],
+  [],
+  [['dim', '[ 0.000]'], ['', ' loading config ~/.airv/config.toml ... '], ['ok', 'ok']],
+  [['dim', '[ 0.142]'], ['', ' resolving validation cluster eu-west-2 ... '], ['ok', 'ok']],
+  [['dim', '[ 0.388]'], ['', ' TLS handshake (TLSv1.3, x25519) ... '], ['ok', 'ok']],
+  [['dim', '[ 0.511]'], ['', ' model registry: 14 models, 2 instances '], ['ok', 'online']],
+  [['dim', '[ 0.604]'], ['warn', ' warn:'], ['', ' response cache 87% full, run '], ['acc', 'airv cache prune']],
+  [],
+];
+const BOOT_STEP_MS = 110;
+const INSTANCES = [['user1', 'a', 'Instance A'], ['user2', 'b', 'Instance B']];
+const COLORS = { dim: '#6f6f6f', ok: '#3fb950', warn: '#d29922', err: '#f85149', acc: '#58a6ff', b: '#f0f0f0' };
 
-  const handleLogin = () => {
-    if (!user) { setError('Please select an instance'); return; }
-    if (pass !== PASSCODE) { setError('Invalid access token'); return; }
-    setLoading(true);
-    setTimeout(() => onLogin(user), 300);
+const Line = ({ parts }) => (
+  <div>{parts.length ? parts.map(([c, t], i) => <span key={i} style={c ? { color: COLORS[c] } : undefined}>{t}</span>) : ' '}</div>
+);
+const Cursor = () => <span className="term-cursor" aria-hidden="true" />;
+
+const LoginScreen = ({ onLogin }) => {
+  const [booted, setBooted] = useState(0);
+  const [user, setUser] = useState(null);
+  const [log, setLog] = useState([]); // finished prompt lines after the instance is picked
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (booted >= BOOT_LINES.length) return undefined;
+    const t = setTimeout(() => setBooted(n => n + 1), BOOT_STEP_MS);
+    return () => clearTimeout(t);
+  }, [booted]);
+
+  const name = user && INSTANCES.find(i => i[0] === user)[1];
+  const prompt = name && [['', `token for instance-${name}: `]];
+
+  // Focus inside the tap itself, or iOS won't open the keyboard.
+  const pick = u => {
+    if (user) return;
+    setUser(u);
+    inputRef.current?.focus();
   };
 
+  const submit = () => {
+    if (busy || done) return;
+    setBusy(true);
+    const entered = token;
+    setToken('');
+    setTimeout(() => {
+      setBusy(false);
+      if (entered !== PASSCODE) {
+        setLog(l => [...l, prompt, [['err', 'error:'], ['', ' authentication failed (401)']]]);
+        inputRef.current?.focus();
+        return;
+      }
+      setDone(true);
+      inputRef.current?.blur();
+      setLog(l => [...l, prompt, [['ok', 'authenticated'], ['', ` as instance-${name} `], ['dim', '· session 3h · scope: validate,read']]]);
+      setTimeout(() => onLogin(user), 400);
+    }, 350);
+  };
+
+  const bootDone = booted >= BOOT_LINES.length;
   return (
-    <div className="login-screen">
-      {/* Centered card - uses padding+min-height so it's scrollable when keyboard opens */}
-      <div style={{
-        minHeight: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '40px 24px',
-      }}>
-        <div style={{
-          width: '100%',
-          maxWidth: '380px',
-          background: 'rgba(255,255,255,0.06)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderRadius: '24px',
-          padding: '40px 28px',
-          border: '1px solid rgba(255,255,255,0.1)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-        }}>
-          {/* Icon + title */}
-          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-            <div style={{
-              width: '72px', height: '72px',
-              background: 'linear-gradient(135deg, #667eea, #764ba2)',
-              borderRadius: '20px', margin: '0 auto 16px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '36px', boxShadow: '0 8px 24px rgba(102,126,234,0.4)',
-            }}>
-              🤖
-            </div>
-            <h1 style={{ color: 'white', fontSize: '22px', fontWeight: '800', margin: '0 0 6px' }}>
-              AI Response Validator
-            </h1>
-            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '14px', margin: 0 }}>
-              Select instance and enter access token
-            </p>
-          </div>
-
-          {/* Instance selector */}
-          <div style={{ marginBottom: '20px' }}>
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', fontWeight: '700', letterSpacing: '0.08em', marginBottom: '10px' }}>
-              SELECT INSTANCE
-            </p>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              {['user1', 'user2'].map(u => (
-                <button
-                  key={u}
-                  onClick={() => { setUser(u); setError(''); }}
-                  style={{
-                    flex: 1, padding: '14px 10px',
-                    borderRadius: '14px',
-                    border: `2px solid ${user === u ? '#667eea' : 'rgba(255,255,255,0.12)'}`,
-                    background: user === u ? 'rgba(102,126,234,0.2)' : 'rgba(255,255,255,0.04)',
-                    color: 'white', fontWeight: '700', fontSize: '14px',
-                    cursor: 'pointer', transition: 'all 0.15s',
-                  }}
-                >
-                  {u === 'user1' ? 'Instance A' : 'Instance B'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Password */}
-          <div style={{ marginBottom: '24px' }}>
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', fontWeight: '700', letterSpacing: '0.08em', marginBottom: '10px' }}>
-              ACCESS TOKEN
-            </p>
-            <input
-              type="password"
-              value={pass}
-              onChange={e => { setPass(e.target.value); setError(''); }}
-              onKeyPress={e => e.key === 'Enter' && handleLogin()}
-              placeholder="Enter access token"
-              style={{
-                width: '100%', padding: '15px 16px',
-                borderRadius: '14px',
-                border: `2px solid ${error ? '#ef4444' : 'rgba(255,255,255,0.12)'}`,
-                background: 'rgba(255,255,255,0.06)',
-                color: 'white', fontSize: '16px', outline: 'none',
-              }}
-            />
-            {error && (
-              <p style={{ color: '#ef4444', fontSize: '13px', marginTop: '8px', margin: '8px 0 0' }}>{error}</p>
-            )}
-          </div>
-
-          {/* Submit */}
-          <button
-            onClick={handleLogin}
-            disabled={loading}
-            style={{
-              width: '100%', padding: '16px',
-              borderRadius: '14px', border: 'none',
-              background: loading ? 'rgba(102,126,234,0.4)' : 'linear-gradient(135deg, #667eea, #764ba2)',
-              color: 'white', fontSize: '16px', fontWeight: '700',
-              cursor: loading ? 'default' : 'pointer',
-              boxShadow: loading ? 'none' : '0 4px 16px rgba(102,126,234,0.35)',
-              transition: 'all 0.15s',
-            }}
-          >
-            {loading ? 'Authenticating…' : 'Authenticate'}
-          </button>
-        </div>
+    <div className="login-screen" onClick={() => { if (user && !done) inputRef.current?.focus(); }}>
+      <div className="term">
+        {BOOT_LINES.slice(0, booted).map((parts, i) => <Line key={i} parts={parts} />)}
+        {bootDone && (
+          <>
+            <Line parts={[['ok', 'airv'], ['', ':'], ['acc', '~'], ['', '$ login']]} />
+            <Line parts={[['dim', 'select instance:']]} />
+            {INSTANCES.map(([u, key, label], i) => (
+              <button key={u} type="button" aria-label={label} className="term-option"
+                onClick={e => { e.stopPropagation(); pick(u); }}
+                style={{ opacity: user && user !== u ? 0.35 : 1 }}>
+                {'  '}<span style={{ color: COLORS.acc }}>[{i + 1}]</span> instance-{key}{'  '}
+                <span style={{ color: COLORS.dim }}>(eu-west-2, idle)</span>
+              </button>
+            ))}
+            {log.map((parts, i) => <Line key={i} parts={parts} />)}
+            {user && !done && <div>{prompt[0][1]}{!busy && <Cursor />}</div>}
+          </>
+        )}
       </div>
+      {/* The token is typed into this invisible field; nothing is echoed, like a CLI password prompt. */}
+      <input ref={inputRef} className="term-input" type="password" value={token} aria-label="Token"
+        autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="go"
+        onChange={e => setToken(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }} />
     </div>
   );
 };
