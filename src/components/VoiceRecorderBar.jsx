@@ -11,6 +11,7 @@ const ERRORS = {
   permission: 'Allow microphone access in Settings › Safari to send voice messages',
   unavailable: 'Microphone not available',
   empty: "Couldn't record — try again",
+  interrupted: 'Recording stopped — send it or delete it',
 };
 const HINT = 'Hold to record, release to send';
 const point = e => (e.touches?.[0] || e.changedTouches?.[0] || e);
@@ -20,7 +21,7 @@ const point = e => (e.touches?.[0] || e.changedTouches?.[0] || e);
  * to cancel, slide up to lock (then delete / pause / send). While active it overlays
  * the rest of the footer row (the row must be position: relative).
  */
-export default function VoiceRecorderBar({ onSend, onNotice }) {
+export default function VoiceRecorderBar({ onSend, onNotice, onActiveChange }) {
   const [locked, setLocked] = useState(false);
   const [dragX, setDragX] = useState(0);
   const micRef = useRef(null);
@@ -30,6 +31,7 @@ export default function VoiceRecorderBar({ onSend, onNotice }) {
     onLimit: result => { setLocked(false); onSend(result); },
   });
   const active = recorder.status !== 'idle';
+  useEffect(() => { onActiveChange?.(active); }, [active]);
 
   const finish = async send => {
     setLocked(false);

@@ -38,25 +38,33 @@ export function useVoiceRecorder({ onError, onLimit } = {}) {
     setLevels([]);
   };
 
-  const stop = useCallback(() => new Promise(resolve => {
+  const stop = useCallback(() => {
     const s = rec.current;
+    if (s.stopping) return s.stopping; // limit timer and a tap can both ask to stop
     if (!s.recorder) { // finger lifted before the mic was ready
       if (s.starting) s.abandoned = true;
       release();
-      resolve(s.starting ? { tooShort: true } : null);
-      return;
+      return Promise.resolve(s.starting ? { tooShort: true } : null);
     }
+    clearInterval(s.timer);
     const duration = seconds();
-    s.recorder.onstop = () => {
-      const blob = new Blob(s.chunks, { type: s.mime });
-      const waveform = reduceWaveform(s.samples);
-      release();
-      if (duration < VOICE_MIN_SECONDS) { resolve({ tooShort: true }); return; }
-      if (!blob.size) { callbacks.current.onError?.('empty'); resolve(null); return; }
-      resolve({ blob, duration: Math.round(duration * 10) / 10, waveform, mime: s.mime });
-    };
-    s.recorder.stop();
-  }), []);
+    s.runningSince = null;
+    s.stopping = new Promise(resolve => {
+      const finish = () => {
+        const blob = new Blob(s.chunks, { type: s.mime });
+        const waveform = reduceWaveform(s.samples);
+        release();
+        if (duration < VOICE_MIN_SECONDS) { resolve({ tooShort: true }); return; }
+        if (!blob.size) { callbacks.current.onError?.('empty'); resolve(null); return; }
+        resolve({ blob, duration: Math.round(duration * 10) / 10, waveform, mime: s.mime });
+      };
+      // Already stopped by the system (call, Siri, app backgrounded): no stop event will come.
+      if (s.recorder.state === 'inactive') { finish(); return; }
+      s.recorder.onstop = finish;
+      try { s.recorder.stop(); } catch { finish(); }
+    });
+    return s.stopping;
+  }, []);
 
   const start = useCallback(async () => {
     if (rec.current.recorder || rec.current.starting) return false;
@@ -77,6 +85,18 @@ export function useVoiceRecorder({ onError, onLimit } = {}) {
     const recorder = new MediaRecorder(stream, { ...(mime && { mimeType: mime }), audioBitsPerSecond: 32000 });
     const chunks = [];
     recorder.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
+    // The system can end capture on its own (a call, Siri, the app going to the background).
+    // Freeze the timer and keep what was recorded; send or delete then works as usual.
+    const interrupted = () => {
+      const s = rec.current;
+      if (s.recorder !== recorder || s.stopping) return;
+      if (s.runningSince) { s.accumulated += (performance.now() - s.runningSince) / 1000; s.runningSince = null; }
+      clearInterval(s.timer);
+      setElapsed(s.accumulated);
+      callbacks.current.onError?.('interrupted');
+    };
+    recorder.onstop = interrupted;
+    recorder.onerror = interrupted;
 
     let ctx, analyser, buffer;
     try {
@@ -117,7 +137,7 @@ export function useVoiceRecorder({ onError, onLimit } = {}) {
 
   const pause = useCallback(() => {
     const s = rec.current;
-    if (!s.recorder || !s.runningSince) return;
+    if (!s.recorder || !s.runningSince || s.recorder.state !== 'recording') return;
     s.recorder.pause();
     s.accumulated += (performance.now() - s.runningSince) / 1000;
     s.runningSince = null;
@@ -126,7 +146,7 @@ export function useVoiceRecorder({ onError, onLimit } = {}) {
 
   const resume = useCallback(() => {
     const s = rec.current;
-    if (!s.recorder || s.runningSince) return;
+    if (!s.recorder || s.runningSince || s.recorder.state !== 'paused') return;
     s.recorder.resume();
     s.runningSince = performance.now();
     setStatus('recording');

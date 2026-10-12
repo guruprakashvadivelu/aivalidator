@@ -93,6 +93,9 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   };
   const showComingSoon = feature => showNotice(`${feature} — coming soon`);
   const hasText = !!input.trim();
+  // While a voice note is recording, keep the recorder mounted and the message box read-only,
+  // so a stray keystroke can't swap the mic for Send and discard the recording.
+  const [voiceActive, setVoiceActive] = useState(false);
 
   const {
     messages, reads, isOtherTyping, reactions,
@@ -376,7 +379,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
             {/* Return adds a new line (as in iMessage); messages are sent with the send button. */}
             <textarea
               ref={inputRef}
-              rows={1} value={input} onChange={handleInputChange}
+              rows={1} value={input} onChange={handleInputChange} readOnly={voiceActive}
               aria-label="Message"
               style={{ flex: 1, minWidth: 0, display: 'block', background: 'var(--input-field)', border: 'none', borderRadius: '18px', padding: `${INPUT_PADDING_Y}px 40px ${INPUT_PADDING_Y}px 14px`, color: 'var(--bubble-text)', fontSize: '16px', lineHeight: `${INPUT_LINE_HEIGHT}px`, fontFamily: 'inherit', outline: 'none', resize: 'none', overflowY: 'auto', maxHeight: `${MAX_INPUT_HEIGHT}px` }}
             />
@@ -402,7 +405,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
             </button>
           )}
 
-          {hasText ? (
+          {hasText && !voiceActive ? (
             <button aria-label="Send" onClick={handleSend} onTouchEnd={handleSendTouchEnd} onMouseDown={e => e.preventDefault()} style={ICON_BUTTON}>
               <span style={{ width: '33px', height: '33px', borderRadius: '50%', background: 'var(--accent-green)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="18" height="18" fill="#0b1a10" viewBox="0 0 24 24"><path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a1 1 0 00-1.39 1.17L4.5 12l-2.49 7.23a1 1 0 001.39 1.17z"/></svg>
@@ -412,6 +415,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
             <VoiceRecorderBar
               onSend={result => sendVoice(result).catch(() => showNotice("Couldn't send voice message", 2500))}
               onNotice={text => showNotice(text, 2500)}
+              onActiveChange={setVoiceActive}
             />
           )}
         </div>

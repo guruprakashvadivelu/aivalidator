@@ -58,3 +58,8 @@ export function markPlayed(db, id, user) {
 }
 
 export const voicePaths = id => [`voice/${id}`, `played/${id}`];
+
+// Everything stored for these messages, as one multi-path update (null deletes a path).
+export const deletionUpdate = ids => Object.fromEntries(
+  ids.flatMap(id => [`messages/${id}`, `reads/${id}`, `reactions/${id}`, ...voicePaths(id)].map(p => [p, null]))
+);

@@ -50,4 +50,12 @@ describe('voiceService', () => {
     expect(calls.set).toEqual([['played/k1/user2', true]]);
     expect(svc.voicePaths('k1')).toEqual(['voice/k1', 'played/k1']);
   });
+
+  it('builds one atomic deletion covering every path of each message', () => {
+    expect(svc.deletionUpdate(['a', 'b'])).toEqual({
+      'messages/a': null, 'reads/a': null, 'reactions/a': null, 'voice/a': null, 'played/a': null,
+      'messages/b': null, 'reads/b': null, 'reactions/b': null, 'voice/b': null, 'played/b': null,
+    });
+    expect(svc.deletionUpdate([])).toEqual({});
+  });
 });

@@ -3,6 +3,10 @@ import { formatDuration } from '../voice/format';
 import { WAVEFORM_MAX } from '../voice/waveform';
 
 const SPEEDS = [1, 1.5, 2];
+// Silent, zero-length WAV: played inside the tap so iOS lets this element start playback
+// later, when the real audio arrives after the download.
+const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+const DRAG_SLOP = 8; // px before a drag counts as scrubbing (horizontal) or scrolling (vertical)
 let nowPlaying = null; // only one voice note plays at a time
 
 /** Voice note playback inside a message bubble (WhatsApp style). */
@@ -15,6 +19,7 @@ export default function VoiceBubble({ msg, isMine, listened, loadVoice, onPlayed
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [speed, setSpeed] = useState(1);
+  const drag = useRef(null); // { x, y, mode: null | 'scrub' | 'scroll' }
 
   const audio = () => {
     if (!audioRef.current) {
@@ -63,9 +68,37 @@ export default function VoiceBubble({ msg, isMine, listened, loadVoice, onPlayed
 
   const toggle = () => {
     if (playing) { audio().pause(); return; }
-    if (!url) { setWantPlay(true); load().catch(() => setWantPlay(false)); return; }
+    if (!url) {
+      const a = audio();
+      a.src = SILENT;
+      a.play().catch(() => {});
+      setWantPlay(true);
+      load().catch(() => setWantPlay(false));
+      return;
+    }
     play();
   };
+
+  // Touch on the waveform: scrub only once the drag is clearly horizontal, so scrolling the
+  // chat (vertical) or the bubble's swipe-to-reply never moves the playback position.
+  const onTouchStart = e => {
+    e.stopPropagation();
+    const t = e.touches[0];
+    drag.current = { x: t.clientX, y: t.clientY, mode: null };
+  };
+  const onTouchMove = e => {
+    const d = drag.current;
+    if (!d) return;
+    e.stopPropagation();
+    const t = e.touches[0];
+    if (!d.mode) {
+      const dx = Math.abs(t.clientX - d.x), dy = Math.abs(t.clientY - d.y);
+      if (Math.max(dx, dy) < DRAG_SLOP) return;
+      d.mode = dx > dy ? 'scrub' : 'scroll';
+    }
+    if (d.mode === 'scrub') seek(e);
+  };
+  const onTouchEnd = e => { e.stopPropagation(); drag.current = null; };
 
   const seek = e => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -98,7 +131,7 @@ export default function VoiceBubble({ msg, isMine, listened, loadVoice, onPlayed
       </button>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div role="slider" aria-label="Voice message position" aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(time)}
-          onClick={seek} onTouchMove={seek}
+          onClick={seek} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
           style={{ display: 'flex', alignItems: 'center', gap: '2px', height: '26px', cursor: 'pointer' }}>
           {waveform.map((v, i) => (
             <span key={i} style={{ flex: 1, maxWidth: '3px', borderRadius: '1.5px', height: `${3 + (v / WAVEFORM_MAX) * 21}px`, background: i / waveform.length < progress ? 'var(--bubble-text)' : 'rgba(255,255,255,0.4)' }} />

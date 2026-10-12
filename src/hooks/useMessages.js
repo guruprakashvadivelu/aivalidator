@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ref, onValue, push, set, remove, update } from 'firebase/database';
 import { db } from '../firebase/config';
-import { saveVoiceMessage, loadVoiceUrl, markPlayed, voicePaths } from '../services/voiceService';
+import { saveVoiceMessage, loadVoiceUrl, markPlayed, deletionUpdate } from '../services/voiceService';
 import { shouldDelete } from '../voice/retention';
 
 export function useMessages(currentUser, selectedChat) {
@@ -68,22 +68,15 @@ export function useMessages(currentUser, selectedChat) {
     }
   }, [messages, currentUser, reads]);
 
-  // A message's own entry plus everything keyed by it (reads, reactions, voice audio, played).
-  const removeMessage = async id => {
-    for (const path of [`messages/${id}`, `reads/${id}`, `reactions/${id}`, ...voicePaths(id)]) {
-      await remove(ref(db, path));
-    }
-  };
+  // Messages plus everything keyed by them (reads, reactions, voice audio, played), in one
+  // atomic write: a single round trip, and no audio left behind if the app is closed midway.
+  const removeMessages = ids => (ids.length ? update(ref(db), deletionUpdate(ids)) : Promise.resolve());
 
   // 24h expiry
   useEffect(() => {
     if (deletionMode !== 'after_24h') return;
     const now = Date.now();
-    messages.forEach(async msg => {
-      if (msg.timestamp && now - msg.timestamp > 86400000) {
-        await removeMessage(msg.id);
-      }
-    });
+    removeMessages(messages.filter(msg => msg.timestamp && now - msg.timestamp > 86400000).map(msg => msg.id));
   }, [messages, deletionMode]);
 
   const deleteReadMessages = useCallback(async () => {
@@ -91,7 +84,7 @@ export function useMessages(currentUser, selectedChat) {
     const toDelete = messages.filter(msg =>
       shouldDelete(msg, { reads, played, me: currentUser, other: selectedChat })
     );
-    for (const msg of toDelete) await removeMessage(msg.id);
+    await removeMessages(toDelete.map(msg => msg.id));
   }, [messages, reads, played, currentUser, selectedChat, deletionMode]);
 
   const sendMessage = useCallback(async (text, replyTo = null) => {
