@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import VoiceBubble from './VoiceBubble';
 import MessageActions from './MessageActions';
+import { linkify } from '../utils/linkify';
 
 
 const Ticks = ({ isRead }) => (
@@ -65,6 +66,12 @@ const BubbleTail = ({ isMine }) => (
 );
 
 const BUBBLE_RADIUS = '18px';
+
+// Message text with tappable links (WhatsApp's light-blue, underlined links).
+const MessageText = ({ text }) => linkify(text).map((part, i) => (part.href
+  ? <a key={i} href={part.href} target="_blank" rel="noopener noreferrer"
+      style={{ color: '#53bdeb', textDecoration: 'underline', wordBreak: 'break-all' }}>{part.text}</a>
+  : <React.Fragment key={i}>{part.text}</React.Fragment>));
 
 const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, voiceListened, loadVoice, onVoicePlayed, onMediaClick, onReply, onCopy, reactions, currentUser, onReact }) => {
   const [showActions, setShowActions] = useState(false);
@@ -161,7 +168,7 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, voiceListen
       {msg.text && (
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px' }}>
           <span style={{ color: 'var(--bubble-text)', fontSize: '14px', lineHeight: '20px', flex: '1 1 auto', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
-            {msg.text}
+            <MessageText text={msg.text} />
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0, paddingBottom: '1px' }}>
             <span style={{ color: isMine ? 'var(--time-out)' : 'var(--time-in)', fontSize: '11px', whiteSpace: 'nowrap' }}>{timeStr}</span>
