@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+import VoiceBubble from './VoiceBubble';
 
 const EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🙏'];
 
@@ -88,7 +89,7 @@ const BubbleTail = ({ isMine }) => (
 
 const BUBBLE_RADIUS = '18px';
 
-const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, onMediaClick, onReply, reactions, currentUser, onReact }) => {
+const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, voiceListened, loadVoice, onVoicePlayed, onMediaClick, onReply, reactions, currentUser, onReact }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const longPressTimer = useRef(null);
   const swipeStartX = useRef(null);
@@ -146,6 +147,15 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, onMediaClic
             : <video src={msg.mediaData || msg.mediaUrl} style={{ maxWidth: '100%', maxHeight: '180px' }} />
           }
         </div>
+      )}
+      {msg.type === 'voice' && (
+        <>
+          <VoiceBubble msg={msg} isMine={isMine} listened={voiceListened} loadVoice={loadVoice} onPlayed={onVoicePlayed} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '3px', marginTop: '-2px' }}>
+            <span style={{ color: isMine ? 'var(--time-out)' : 'var(--time-in)', fontSize: '11px' }}>{timeStr}</span>
+            {isMine && <Ticks isRead={isRead} />}
+          </div>
+        </>
       )}
       {msg.text && (
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px' }}>
@@ -221,6 +231,7 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, onMediaClic
   prev.msg.id === next.msg.id &&
   prev.isRead === next.isRead &&
   prev.isGroupEnd === next.isGroupEnd &&
+  prev.voiceListened === next.voiceListened &&
   JSON.stringify(prev.reactions?.[prev.msg.id]) === JSON.stringify(next.reactions?.[next.msg.id])
 );
 

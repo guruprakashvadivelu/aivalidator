@@ -96,7 +96,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
 
   const {
     messages, reads, isOtherTyping, reactions,
-    sendMessage, sendMedia, setTypingStatus, sendVoice,
+    sendMessage, sendMedia, setTypingStatus, sendVoice, played, loadVoice, markVoicePlayed,
     deleteReadMessages, addReaction, removeReaction,
   } = useMessages(currentUser, selectedChat);
 
@@ -307,6 +307,9 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
                 msg={item.msg}
                 isMine={item.msg.sender === currentUser}
                 isGroupEnd={item.isGroupEnd}
+                voiceListened={!!played[item.msg.id]?.[item.msg.sender === currentUser ? selectedChat : currentUser]}
+                loadVoice={loadVoice}
+                onVoicePlayed={markVoicePlayed}
                 isRead={!!(reads[item.msg.id]?.[selectedChat])}
                 onMediaClick={setSnapViewer}
                 onReply={msg => { setReplyTo(msg); inputRef.current?.focus(); }}
