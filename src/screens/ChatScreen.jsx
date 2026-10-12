@@ -63,7 +63,7 @@ const ICON_BUTTON = {
 const HEADER_PILL = {
   background: 'var(--chat-pill)', border: '1px solid var(--chat-pill-border)', borderRadius: '999px',
 };
-// Placeholder controls (stickers, voice notes, calls) must not take focus from the message box,
+// Controls tapped while typing (e.g. the call buttons) must not take focus from the message box,
 // or iOS closes the keyboard; handle the tap on touchend and cancel it, like the send button.
 const keepKeyboard = handler => ({
   onMouseDown: e => e.preventDefault(),
@@ -367,7 +367,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
         </div>
       )}
 
-      {/* FOOTER (WhatsApp layout: + · message field with sticker · camera · mic; send while typing) */}
+      {/* FOOTER (WhatsApp layout: + · message field · camera · mic; send while typing) */}
       <div className="chat-footer">
         <ReplyBar replyTo={replyTo} onCancel={() => setReplyTo(null)} />
         {linkPreview && <LinkPreviewCard preview={linkPreview} variant="compose" onDismiss={dismissLinkPreview} />}
@@ -390,19 +390,11 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
               ref={inputRef}
               rows={1} value={input} onChange={handleInputChange} readOnly={voiceActive}
               aria-label="Message"
-              style={{ flex: 1, minWidth: 0, display: 'block', background: 'var(--input-field)', border: 'none', borderRadius: '18px', padding: `${INPUT_PADDING_Y}px 40px ${INPUT_PADDING_Y}px 14px`, color: 'var(--bubble-text)', fontSize: '16px', lineHeight: `${INPUT_LINE_HEIGHT}px`, fontFamily: 'inherit', outline: 'none', resize: 'none', overflowY: 'auto', maxHeight: `${MAX_INPUT_HEIGHT}px` }}
+              style={{ flex: 1, minWidth: 0, display: 'block', background: 'var(--input-field)', border: 'none', borderRadius: '18px', padding: `${INPUT_PADDING_Y}px 14px`, color: 'var(--bubble-text)', fontSize: '16px', lineHeight: `${INPUT_LINE_HEIGHT}px`, fontFamily: 'inherit', outline: 'none', resize: 'none', overflowY: 'auto', maxHeight: `${MAX_INPUT_HEIGHT}px` }}
             />
             {/* Look-alike shown while useFocusWithoutScroll holds the real input off-screen. */}
             <div ref={inputStandInRef} aria-hidden="true"
-              style={{ visibility: 'hidden', position: 'absolute', inset: 0, background: 'var(--input-field)', borderRadius: '18px', padding: `${INPUT_PADDING_Y}px 40px ${INPUT_PADDING_Y}px 14px`, fontSize: '16px', lineHeight: `${INPUT_LINE_HEIGHT}px`, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'hidden', pointerEvents: 'none' }} />
-            {/* Sticker (placeholder) inside the field, bottom-right */}
-            <button aria-label="Stickers" {...keepKeyboard(() => showComingSoon('Stickers'))}
-              style={{ ...ICON_BUTTON, width: '40px', height: '34px', position: 'absolute', right: 0, bottom: 0 }}>
-              <svg width="22" height="22" fill="none" stroke="var(--icon)" strokeWidth="1.8" strokeLinejoin="round" viewBox="0 0 24 24">
-                <path d="M20 13V8a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v8a4 4 0 0 0 4 4h5z"/>
-                <path d="M20 13h-3a4 4 0 0 0-4 4v3"/>
-              </svg>
-            </button>
+              style={{ visibility: 'hidden', position: 'absolute', inset: 0, background: 'var(--input-field)', borderRadius: '18px', padding: `${INPUT_PADDING_Y}px 14px`, fontSize: '16px', lineHeight: `${INPUT_LINE_HEIGHT}px`, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'hidden', pointerEvents: 'none' }} />
           </div>
 
           {!hasText && (
