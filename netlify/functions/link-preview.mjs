@@ -78,10 +78,11 @@ const json = (status, body, cache) => new Response(JSON.stringify(body), {
   status,
   headers: {
     'content-type': 'application/json; charset=utf-8',
-    // Cached per caller: without Netlify-Vary, a cached answer would skip allowedRequest() for everyone.
+    // Cache key = the link AND the caller. Setting Netlify-Vary replaces the default (query string), so
+    // query=url must be listed; the caller headers stop a cached answer from skipping allowedRequest().
     ...(cache && {
       'netlify-cdn-cache-control': 'public, max-age=86400, durable',
-      'netlify-vary': 'header=Origin|Sec-Fetch-Site',
+      'netlify-vary': 'query=url|header=Origin|Sec-Fetch-Site',
       'cache-control': 'public, max-age=3600',
     }),
   },
