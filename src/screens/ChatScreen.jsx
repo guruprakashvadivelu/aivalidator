@@ -3,6 +3,7 @@ import { useMessages } from '../hooks/useMessages';
 import { useKeyboardViewport, useFocusWithoutScroll } from '../hooks/useKeyboardViewport';
 import { processMedia } from '../services/mediaService';
 import MessageBubble from '../components/MessageBubble';
+import VoiceRecorderBar from '../components/VoiceRecorderBar';
 import SnapViewer from '../components/SnapViewer';
 
 // Date separator helper
@@ -85,16 +86,17 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
   const inputStandInRef = useRef(null);
   const [notice, setNotice] = useState(null);
   const noticeTimer = useRef(null);
-  const showComingSoon = feature => {
-    setNotice(`${feature} — coming soon`);
+  const showNotice = (text, ms = 1600) => {
+    setNotice(text);
     clearTimeout(noticeTimer.current);
-    noticeTimer.current = setTimeout(() => setNotice(null), 1600);
+    noticeTimer.current = setTimeout(() => setNotice(null), ms);
   };
+  const showComingSoon = feature => showNotice(`${feature} — coming soon`);
   const hasText = !!input.trim();
 
   const {
     messages, reads, isOtherTyping, reactions,
-    sendMessage, sendMedia, setTypingStatus,
+    sendMessage, sendMedia, setTypingStatus, sendVoice,
     deleteReadMessages, addReaction, removeReaction,
   } = useMessages(currentUser, selectedChat);
 
@@ -354,7 +356,7 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
       {/* FOOTER (WhatsApp layout: + · message field with sticker · camera · mic; send while typing) */}
       <div className="chat-footer">
         <ReplyBar replyTo={replyTo} onCancel={() => setReplyTo(null)} />
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', padding: '6px 6px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', padding: '6px 6px', position: 'relative' }}>
           {/* Hidden file inputs */}
           <input type="file" ref={fileInputRef} onChange={e => { handleFileSelected(e.target.files[0]); e.target.value=''; }} accept="image/*,video/*" style={{ display: 'none' }} />
           <input type="file" ref={cameraInputRef} onChange={e => { handleFileSelected(e.target.files[0]); e.target.value=''; }} accept="image/*,video/*" capture="environment" style={{ display: 'none' }} />
@@ -404,13 +406,10 @@ const ChatScreen = ({ currentUser, selectedChat, presence, onBack }) => {
               </span>
             </button>
           ) : (
-            <button aria-label="Voice message" style={ICON_BUTTON} {...keepKeyboard(() => showComingSoon('Voice messages'))}>
-              <span style={{ width: '33px', height: '33px', borderRadius: '50%', background: 'var(--accent-green)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="20" height="20" fill="none" stroke="#0b1a10" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24">
-                  <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
-                </svg>
-              </span>
-            </button>
+            <VoiceRecorderBar
+              onSend={result => sendVoice(result).catch(() => showNotice("Couldn't send voice message", 2500))}
+              onNotice={text => showNotice(text, 2500)}
+            />
           )}
         </div>
       </div>

@@ -232,3 +232,5 @@ input, textarea, select {
 
 ::-webkit-scrollbar { display: none; }
 * { scrollbar-width: none; }
+
+@keyframes voice-blink { 50% { opacity: 0.2; } }
