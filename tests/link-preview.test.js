@@ -54,6 +54,25 @@ describe('fetchPreview', () => {
   });
 });
 
+it('gives no preview when the site redirects to a login wall', async () => {
+  const fetchFn = vi.fn(async url => (url.includes('/accounts/login')
+    ? page(html('<meta property="og:title" content="Instagram"><meta property="og:description" content="Create an account or log in">'))
+    : new Response(null, { status: 302, headers: { location: 'https://www.instagram.com/accounts/login/?next=%2Finstagram%2F' } })));
+  expect(await fetchPreview('https://www.instagram.com/instagram/', { fetchFn, lookupFn: publicDns })).toEqual({ status: 200, body: {} });
+});
+
+it('cached answers vary by caller so the edge cache cannot skip the caller check', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = vi.fn(async () => page(html('<meta property="og:title" content="Hi">')));
+  try {
+    const res = await handler(new Request('https://x/.netlify/functions/link-preview?url=https://93.184.216.34/', {
+      headers: { origin: 'https://myaivalidator.netlify.app' },
+    }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('netlify-vary')).toBe('header=Origin|Sec-Fetch-Site');
+  } finally { globalThis.fetch = realFetch; }
+});
+
 describe('allowedRequest', () => {
   const h = obj => new Headers(obj);
   it('accepts AIRV origins and same-origin requests', () => {

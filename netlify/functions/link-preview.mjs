@@ -8,6 +8,8 @@ const UA = 'AIRV-LinkPreview/1.0 (+https://myaivalidator.netlify.app)';
 const MAX_BYTES = 1_000_000;
 const TIMEOUT_MS = 5000;
 const MAX_REDIRECTS = 3;
+// Sites like Instagram send server requests to a login page; that page is not a preview of the link.
+const LOGIN_WALL = /\/(accounts\/)?(log-?in|sign-?in)\b/i;
 const ALLOWED_ORIGIN = /^(https:\/\/([a-z0-9-]+--)?myaivalidator\.netlify\.app|http:\/\/localhost(:\d+)?)$/;
 
 // Deters reuse by other sites (not authentication: headers can be forged outside a browser).
@@ -59,7 +61,9 @@ export async function fetchPreview(rawUrl, { fetchFn = fetch, lookupFn = lookup 
     });
     const location = res.headers.get('location');
     if (res.status >= 300 && res.status < 400 && location) {
-      current = new URL(location, check.url).href;
+      const next = new URL(location, check.url);
+      if (LOGIN_WALL.test(next.pathname) && !LOGIN_WALL.test(check.url.pathname)) return { status: 200, body: {} };
+      current = next.href;
       continue;
     }
     if (!res.ok || !(res.headers.get('content-type') || '').toLowerCase().includes('text/html')) {
@@ -74,7 +78,12 @@ const json = (status, body, cache) => new Response(JSON.stringify(body), {
   status,
   headers: {
     'content-type': 'application/json; charset=utf-8',
-    ...(cache && { 'netlify-cdn-cache-control': 'public, max-age=86400, durable', 'cache-control': 'public, max-age=3600' }),
+    // Cached per caller: without Netlify-Vary, a cached answer would skip allowedRequest() for everyone.
+    ...(cache && {
+      'netlify-cdn-cache-control': 'public, max-age=86400, durable',
+      'netlify-vary': 'header=Origin|Sec-Fetch-Site',
+      'cache-control': 'public, max-age=3600',
+    }),
   },
 });
 
