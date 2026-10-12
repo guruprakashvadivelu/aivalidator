@@ -77,7 +77,7 @@ export default function CallScreen() {
   const inCall = phase === 'connecting' || phase === 'connected';
 
   return (
-    <div data-call-phase={phase} role="dialog" aria-label={`${video ? 'Video' : 'Audio'} call with ${name}`}
+    <div data-call-phase={phase} data-call-id={call.id || undefined} role="dialog" aria-label={`${video ? 'Video' : 'Audio'} call with ${name}`}
       style={{ position: 'fixed', inset: 0, zIndex: 2000, background: '#0b141a', color: 'white', overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'none' }}>
       {remoteVideo && <Media data-remote stream={call.remote} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', background: '#000' }} />}
       {!video && call.remote && <Media as="audio" data-remote stream={call.remote} />}

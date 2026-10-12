@@ -5,6 +5,8 @@ import { RING_TIMEOUT_MS, newCall, isIncomingFor, callOutcome } from './callMode
 // shows on any screen. Signaling is injected (Firebase in the app, a shared fake in the harness).
 const FALLBACK_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
 const DISCONNECT_GRACE_MS = 8000;
+const CONNECT_TIMEOUT_MS = 30000; // answered but media never connects
+const ICE_MAX_AGE_MS = 12 * 3600 * 1000; // relay credentials last 24 h; refresh well before
 const ENDED_SHOW_MS = 1500;
 const IDLE = { phase: 'idle' };
 
@@ -13,6 +15,8 @@ export const useCallState = () => useContext(CallContext)?.state ?? IDLE;
 export const useCallActions = () => useContext(CallContext)?.actions ?? null;
 
 const ringTimeout = () => window.__ringTimeoutMs ?? RING_TIMEOUT_MS;
+const connectTimeout = () => window.__connectTimeoutMs ?? CONNECT_TIMEOUT_MS;
+const iceMaxAge = () => window.__iceMaxAgeMs ?? ICE_MAX_AGE_MS;
 
 function getMedia(kind, facingMode = 'user') {
   return navigator.mediaDevices.getUserMedia({
@@ -58,13 +62,21 @@ export function CallProvider({ me, other, signaling, children }) {
   const iceRef = useRef(FALLBACK_ICE);
   const session = useRef(null); // per-call resources
 
-  const refreshIce = useCallback(() => {
-    fetch('/.netlify/functions/turn-credentials')
-      .then(r => (r.ok ? r.json() : null))
-      .then(j => { if (j?.iceServers?.length) iceRef.current = j.iceServers; })
-      .catch(() => {});
-  }, []);
-  useEffect(refreshIce, [refreshIce]);
+  const iceFetchedAt = useRef(0);
+  const refreshIce = useCallback(() => fetch('/.netlify/functions/turn-credentials')
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => { if (j?.iceServers?.length) { iceRef.current = j.iceServers; iceFetchedAt.current = Date.now(); } })
+    .catch(() => {}), []);
+  const iceStale = () => Date.now() - iceFetchedAt.current > iceMaxAge();
+  // An iPhone home-screen app can sit suspended for days without reloading, so the relay
+  // credentials are refreshed when the app returns and before a call if they're getting old.
+  const freshIce = () => (iceStale() ? Promise.race([refreshIce(), new Promise(r => setTimeout(r, 3000))]) : null);
+  useEffect(() => {
+    refreshIce();
+    const onVisible = () => { if (document.visibilityState === 'visible' && iceStale()) refreshIce(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refreshIce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const notify = useCallback(text => {
     update(s => ({ ...s, notice: text }));
@@ -90,10 +102,17 @@ export function CallProvider({ me, other, signaling, children }) {
     return session.current;
   };
 
+  // Drop the current call on this phone only (its record was replaced or is gone).
+  const abandon = useCallback(() => { teardown(); update(IDLE); }, [teardown, update]);
+
   const endCall = useCallback(reason => {
     const id = stateRef.current.id;
-    if (id) signaling.end(id, reason, Date.now());
-  }, [signaling]);
+    if (!id) return;
+    // If the record no longer belongs to this call, nothing will report the end: finish here.
+    Promise.resolve(signaling.end(id, reason, Date.now())).then(ok => {
+      if (!ok && session.current?.id === id && !session.current.finished) abandon();
+    });
+  }, [signaling, abandon]);
 
   // The call record says ended: release media, log it (caller only), show a short status.
   const finish = useCallback(active => {
@@ -134,6 +153,12 @@ export function CallProvider({ me, other, signaling, children }) {
     s.pendingRemote.splice(0).forEach(c => s.pc.addIceCandidate(c).catch(() => {}));
   };
 
+  const armConnectTimeout = s => {
+    s.timers.push(setTimeout(() => {
+      if (session.current === s && stateRef.current.phase !== 'connected') endCall('failed');
+    }, connectTimeout()));
+  };
+
   const createPeer = (s, stream) => {
     const pc = new RTCPeerConnection({ iceServers: iceRef.current });
     s.pc = pc;
@@ -150,6 +175,7 @@ export function CallProvider({ me, other, signaling, children }) {
       const cs = pc.connectionState;
       if (cs === 'connected') {
         clearTimeout(graceTimer);
+        s.stopTone?.();
         if (stateRef.current.phase !== 'connected') update(st => ({ ...st, phase: 'connected', connectedAt: Date.now() }));
       } else if (cs === 'failed') {
         endCall('failed');
@@ -181,13 +207,21 @@ export function CallProvider({ me, other, signaling, children }) {
       if (isIncomingFor(active, me, Date.now())) showIncoming(active);
       return;
     }
-    if (!active || active.id !== cur.id) return;
+    if (!cur.id) return; // still placing our own call (glare is settled when it commits)
+    if (!active || active.id !== cur.id) {
+      // Our call's record was replaced (the other app restarted and called again) or the end was
+      // missed: this call is over. Follow a newer call that is ringing for us.
+      abandon();
+      if (isIncomingFor(active, me, Date.now())) showIncoming(active);
+      return;
+    }
     if (active.state === 'ended') finish(active);
+    else if (active.state === 'accepted' && cur.phase === 'incoming') abandon(); // answered on another device
     else if (active.state === 'accepted' && cur.phase === 'outgoing') {
       session.current?.stopTone?.();
       update(s => ({ ...s, phase: 'connecting' }));
     }
-  }), [signaling, me, showIncoming, finish, update]);
+  }), [signaling, me, showIncoming, finish, update, abandon]);
 
   // Closing the app ends the call for the other side straight away.
   useEffect(() => {
@@ -214,6 +248,7 @@ export function CallProvider({ me, other, signaling, children }) {
       notify(kind === 'video' ? 'Allow camera and microphone to call' : 'Allow microphone to call');
       return;
     }
+    await freshIce();
     if (stateRef.current.phase !== 'outgoing') { stream.getTracks().forEach(t => t.stop()); return; }
     const active = newCall({ from: me, to: other, kind, now: Date.now() });
     const s = newSession(active.id);
@@ -223,7 +258,11 @@ export function CallProvider({ me, other, signaling, children }) {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     const ok = await signaling.startCall(active, { type: offer.type, sdp: offer.sdp });
-    if (session.current !== s) return;
+    if (session.current !== s) {
+      // Hung up while the call was being placed: don't leave the other phone ringing.
+      if (ok) signaling.end(active.id, 'cancelled', Date.now());
+      return;
+    }
     if (!ok) {
       // The other phone called first (or a call is ringing): take that call instead.
       teardown();
@@ -236,7 +275,11 @@ export function CallProvider({ me, other, signaling, children }) {
     markSignalReady(s);
     if (stateRef.current.phase !== 'outgoing') { signaling.end(active.id, 'cancelled', Date.now()); return; }
     s.unsubs.push(signaling.watchSignal(active.id, sig => {
-      if (sig.answer && !pc.remoteDescription) setRemote(s, sig.answer).catch(() => endCall('failed'));
+      if (sig.answer && !pc.remoteDescription) {
+        s.stopTone?.();
+        armConnectTimeout(s);
+        setRemote(s, sig.answer).catch(() => endCall('failed'));
+      }
     }));
     s.timers.push(setTimeout(() => {
       if (stateRef.current.phase === 'outgoing' && stateRef.current.id === active.id) signaling.end(active.id, 'missed', Date.now());
@@ -257,9 +300,11 @@ export function CallProvider({ me, other, signaling, children }) {
       notify(cur.kind === 'video' ? 'Camera and microphone are blocked' : 'Microphone is blocked');
       return;
     }
+    await freshIce();
     if (session.current !== s || stateRef.current.phase !== 'connecting') { stream.getTracks().forEach(t => t.stop()); return; }
     update(st => ({ ...st, local: stream }));
     const pc = createPeer(s, stream);
+    armConnectTimeout(s);
     try {
       const offer = await new Promise(resolve => {
         s.unsubs.push(signaling.watchSignal(cur.id, sig => { if (sig.offer) resolve(sig.offer); }));

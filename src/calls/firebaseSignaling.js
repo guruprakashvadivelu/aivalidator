@@ -4,6 +4,8 @@ import { RING_TIMEOUT_MS, callLogText } from './callModel';
 // Call signaling through Firebase: calls/active (one call at a time, two users) and
 // calls/signal/{id}/{offer, answer, candidates/{user}}. Injected into CallProvider so the
 // test harness can swap in a fake with the same shape.
+const UNANSWERED = ['missed', 'declined', 'cancelled'];
+
 export function createFirebaseSignaling(db, me) {
   const activeRef = ref(db, 'calls/active');
   const signalPath = id => `calls/signal/${id}`;
@@ -30,8 +32,12 @@ export function createFirebaseSignaling(db, me) {
       return guarded(id, cur => (cur.state === 'ringing' ? { ...cur, state: 'accepted', acceptedAt } : undefined));
     },
 
-    end: (id, reason, endedAt) =>
-      guarded(id, cur => (cur.state === 'ended' ? undefined : { ...cur, state: 'ended', endReason: reason, endedAt })),
+    // Unanswered reasons only apply while ringing: a second device of the callee timing out (or the
+    // caller's ring timer racing an accept) must not end a call that was just answered.
+    end: (id, reason, endedAt) => guarded(id, cur => {
+      if (cur.state === 'ended' || (UNANSWERED.includes(reason) && cur.state !== 'ringing')) return undefined;
+      return { ...cur, state: 'ended', endReason: reason, endedAt };
+    }),
 
     watchSignal(id, cb) {
       let last;
