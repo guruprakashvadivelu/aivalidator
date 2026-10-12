@@ -17,7 +17,9 @@ export function fetchLinkPreview(url) {
   if (!cache.has(url)) {
     cache.set(url, fetch(`${ENDPOINT}?url=${encodeURIComponent(url)}`)
       .then(r => (r.ok ? r.json() : null))
-      .then(d => (d && (d.title || d.description || d.image) ? d : null))
+      // Keep the link as typed: the function reports the final page address (after redirects,
+      // with a trailing slash...), which wouldn't match the message text at send time.
+      .then(d => (d && (d.title || d.description || d.image) ? { ...d, url } : null))
       .catch(() => null));
   }
   return cache.get(url);

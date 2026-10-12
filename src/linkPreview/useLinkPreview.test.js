@@ -17,3 +17,25 @@ it('keeps a preview only while its link is still in the text', () => {
 it('matches www links typed without https', () => {
   expect(previewForSend('try www.google.com', { url: 'https://www.google.com', title: 'Google' })).toEqual({ url: 'https://www.google.com', title: 'Google' });
 });
+
+it('keeps the link as typed even when the server reports the page under another address', async () => {
+  const { fetchLinkPreview } = await import('./useLinkPreview');
+  const realFetch = globalThis.fetch;
+  // youtu.be redirects; the function reports the final page address.
+  globalThis.fetch = async () => new Response(JSON.stringify({ url: 'https://www.youtube.com/watch?v=abc&feature=youtu.be', title: 'Video' }));
+  try {
+    const p = await fetchLinkPreview('https://youtu.be/abc');
+    expect(p.url).toBe('https://youtu.be/abc');
+    expect(previewForSend('watch https://youtu.be/abc', p)).toMatchObject({ url: 'https://youtu.be/abc', title: 'Video' });
+  } finally { globalThis.fetch = realFetch; }
+});
+
+it('a link typed without a trailing slash still matches', async () => {
+  const { fetchLinkPreview } = await import('./useLinkPreview');
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ url: 'https://example.com/', title: 'Example' }));
+  try {
+    const p = await fetchLinkPreview('https://example.com');
+    expect(previewForSend('see https://example.com', p)).not.toBeNull();
+  } finally { globalThis.fetch = realFetch; }
+});
