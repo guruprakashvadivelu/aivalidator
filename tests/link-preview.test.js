@@ -69,7 +69,7 @@ it('cached answers vary by caller so the edge cache cannot skip the caller check
       headers: { origin: 'https://myaivalidator.netlify.app' },
     }));
     expect(res.status).toBe(200);
-    expect(res.headers.get('netlify-vary')).toBe('query=url|header=Origin|Sec-Fetch-Site'); // keyed by link AND caller
+    expect(res.headers.get('netlify-vary')).toBe('query=url,header=Origin|Sec-Fetch-Site'); // keyed by link AND caller
   } finally { globalThis.fetch = realFetch; }
 });
 

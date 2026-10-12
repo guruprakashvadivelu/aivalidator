@@ -82,7 +82,7 @@ const json = (status, body, cache) => new Response(JSON.stringify(body), {
     // query=url must be listed; the caller headers stop a cached answer from skipping allowedRequest().
     ...(cache && {
       'netlify-cdn-cache-control': 'public, max-age=86400, durable',
-      'netlify-vary': 'query=url|header=Origin|Sec-Fetch-Site',
+      'netlify-vary': 'query=url,header=Origin|Sec-Fetch-Site', // "," separates rules, "|" separates values
       'cache-control': 'public, max-age=3600',
     }),
   },
