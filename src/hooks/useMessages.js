@@ -3,6 +3,7 @@ import { ref, onValue, push, set, remove, update } from 'firebase/database';
 import { db } from '../firebase/config';
 import { saveVoiceMessage, loadVoiceUrl, markPlayed, deletionUpdate } from '../services/voiceService';
 import { shouldDelete } from '../voice/retention';
+import { previewForSend } from '../linkPreview/useLinkPreview';
 
 export function useMessages(currentUser, selectedChat) {
   const [messages, setMessages] = useState([]);
@@ -87,7 +88,7 @@ export function useMessages(currentUser, selectedChat) {
     await removeMessages(toDelete.map(msg => msg.id));
   }, [messages, reads, played, currentUser, selectedChat, deletionMode]);
 
-  const sendMessage = useCallback(async (text, replyTo = null) => {
+  const sendMessage = useCallback(async (text, replyTo = null, preview = null) => {
     if (!text.trim()) return;
     const msg = {
       text: text.trim(),
@@ -103,6 +104,8 @@ export function useMessages(currentUser, selectedChat) {
         sender: replyTo.sender,
       };
     }
+    const linkPreview = previewForSend(msg.text, preview);
+    if (linkPreview) msg.preview = linkPreview;
     await push(ref(db, 'messages'), msg);
   }, [currentUser]);
 
