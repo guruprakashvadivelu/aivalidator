@@ -69,6 +69,17 @@ const BubbleTail = ({ isMine }) => (
 const BUBBLE_RADIUS = '18px';
 
 // Message text with tappable links (WhatsApp's light-blue, underlined links).
+// Time (+ ticks) of a text message. `hidden` is the in-flow spacer that reserves its room on the last line.
+const TextMeta = ({ time, isMine, isRead, hidden }) => (
+  <span data-time="" aria-hidden={hidden || undefined}
+    style={hidden
+      ? { display: 'inline-flex', visibility: 'hidden', gap: '3px', marginLeft: '8px', fontSize: '11px', whiteSpace: 'nowrap', verticalAlign: 'baseline' }
+      : { position: 'absolute', right: 0, bottom: '-3px', display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', whiteSpace: 'nowrap' }}>
+    <span style={{ color: isMine ? 'var(--time-out)' : 'var(--time-in)' }}>{time}</span>
+    {isMine && <Ticks isRead={isRead} />}
+  </span>
+);
+
 const MessageText = ({ text }) => linkify(text).map((part, i) => (part.href
   ? <a key={i} href={part.href} target="_blank" rel="noopener noreferrer"
       style={{ color: '#53bdeb', textDecoration: 'underline', wordBreak: 'break-all' }}>{part.text}</a>
@@ -82,7 +93,7 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, voiceListen
   const wrapperRef = useRef(null);
   const didLongPress = useRef(false);
 
-  const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); // "6:00 PM", as WhatsApp
   const msgReactions = reactions?.[msg.id];
 
   // Long press detection
@@ -168,14 +179,15 @@ const MessageBubble = React.memo(({ msg, isMine, isRead, isGroupEnd, voiceListen
       )}
       {msg.preview && msg.text && <LinkPreviewCard preview={msg.preview} variant="bubble" />}
       {msg.text && (
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px' }}>
-          <span style={{ color: 'var(--bubble-text)', fontSize: '14px', lineHeight: '20px', flex: '1 1 auto', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+        // WhatsApp layout: the text runs the full bubble width and ends with an invisible copy of the
+        // time, so only the last line makes room for it (or the time drops to its own line); the
+        // visible time sits in the bottom-right corner over that space.
+        <div style={{ position: 'relative' }}>
+          <span style={{ color: 'var(--bubble-text)', fontSize: '14px', lineHeight: '20px', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
             <MessageText text={msg.text} />
+            <TextMeta time={timeStr} isMine={isMine} isRead={isRead} hidden />
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0, paddingBottom: '1px' }}>
-            <span style={{ color: isMine ? 'var(--time-out)' : 'var(--time-in)', fontSize: '11px', whiteSpace: 'nowrap' }}>{timeStr}</span>
-            {isMine && <Ticks isRead={isRead} />}
-          </span>
+          <TextMeta time={timeStr} isMine={isMine} isRead={isRead} />
         </div>
       )}
       {/* Timestamp for media-only messages */}
