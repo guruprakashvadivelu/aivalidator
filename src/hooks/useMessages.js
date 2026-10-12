@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ref, onValue, push, set, remove, update } from 'firebase/database';
 import { db } from '../firebase/config';
 import { saveVoiceMessage, loadVoiceUrl, markPlayed, deletionUpdate } from '../services/voiceService';
@@ -11,7 +11,6 @@ export function useMessages(currentUser, selectedChat) {
   const [typing, setTyping] = useState({});
   const [reactions, setReactions] = useState({});
   const [played, setPlayed] = useState({});
-  const prevCountRef = useRef(0);
   const deletionMode = localStorage.getItem('deleteMode') || 'after_read';
 
   useEffect(() => {
@@ -21,14 +20,6 @@ export function useMessages(currentUser, selectedChat) {
         .map(([id, m]) => ({ id, ...m }))
         .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 
-      // Sound on new incoming message
-      if (list.length > prevCountRef.current) {
-        const newest = list[list.length - 1];
-        if (newest?.sender !== currentUser && prevCountRef.current > 0) {
-          playNotifSound();
-        }
-      }
-      prevCountRef.current = list.length;
       setMessages(list);
     });
     const u2 = onValue(ref(db, 'reads'), snap => setReads(snap.val() || {}));
@@ -37,24 +28,6 @@ export function useMessages(currentUser, selectedChat) {
     const u5 = onValue(ref(db, 'played'), snap => setPlayed(snap.val() || {}));
     return () => { u1(); u2(); u3(); u4(); u5(); };
   }, [currentUser]);
-
-  // Play subtle notification sound
-  const playNotifSound = () => {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.connect(g);
-      g.connect(ctx.destination);
-      o.frequency.value = 880;
-      o.type = 'sine';
-      g.gain.setValueAtTime(0, ctx.currentTime);
-      g.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-      o.start(ctx.currentTime);
-      o.stop(ctx.currentTime + 0.3);
-    } catch (e) {}
-  };
 
   // Mark as read + update last seen
   useEffect(() => {

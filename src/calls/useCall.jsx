@@ -25,31 +25,6 @@ function getMedia(kind, facingMode = 'user') {
   });
 }
 
-// Ringtone (incoming) and ringback (outgoing) as short WebAudio beeps; may stay silent on iPhone
-// until the app has been tapped since opening — an accepted limit.
-function startTone(kind) {
-  let ctx;
-  try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return () => {}; }
-  const beep = (at, freq, len) => {
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.frequency.value = freq;
-    o.connect(g); g.connect(ctx.destination);
-    g.gain.setValueAtTime(0, at);
-    g.gain.linearRampToValueAtTime(0.15, at + 0.02);
-    g.gain.setValueAtTime(0.15, at + len - 0.05);
-    g.gain.linearRampToValueAtTime(0, at + len);
-    o.start(at); o.stop(at + len);
-  };
-  const ring = () => {
-    const t = ctx.currentTime;
-    if (kind === 'ringtone') { beep(t, 880, 0.35); beep(t + 0.45, 880, 0.35); } else beep(t, 440, 1.2);
-  };
-  ring();
-  const timer = setInterval(ring, kind === 'ringtone' ? 2000 : 3000);
-  return () => { clearInterval(timer); ctx.close().catch(() => {}); };
-}
-
 export function CallProvider({ me, other, signaling, children }) {
   const [state, setState] = useState(IDLE);
   const stateRef = useRef(IDLE);
@@ -90,7 +65,6 @@ export function CallProvider({ me, other, signaling, children }) {
     if (!s) return;
     s.unsubs.forEach(u => { try { u(); } catch {} });
     s.timers.forEach(clearTimeout);
-    s.stopTone?.();
     s.pc?.close();
     s.local?.getTracks().forEach(t => t.stop());
     s.wakeLock?.release().catch(() => {});
@@ -175,7 +149,6 @@ export function CallProvider({ me, other, signaling, children }) {
       const cs = pc.connectionState;
       if (cs === 'connected') {
         clearTimeout(graceTimer);
-        s.stopTone?.();
         if (stateRef.current.phase !== 'connected') update(st => ({ ...st, phase: 'connected', connectedAt: Date.now() }));
       } else if (cs === 'failed') {
         endCall('failed');
@@ -192,7 +165,6 @@ export function CallProvider({ me, other, signaling, children }) {
 
   const showIncoming = useCallback(active => {
     const s = newSession(active.id);
-    s.stopTone = startTone('ringtone');
     // If the caller's app vanished, stop ringing when the ring time is up.
     s.timers.push(setTimeout(() => {
       if (stateRef.current.phase === 'incoming' && stateRef.current.id === active.id) signaling.end(active.id, 'missed', Date.now());
@@ -218,7 +190,6 @@ export function CallProvider({ me, other, signaling, children }) {
     if (active.state === 'ended') finish(active);
     else if (active.state === 'accepted' && cur.phase === 'incoming') abandon(); // answered on another device
     else if (active.state === 'accepted' && cur.phase === 'outgoing') {
-      session.current?.stopTone?.();
       update(s => ({ ...s, phase: 'connecting' }));
     }
   }), [signaling, me, showIncoming, finish, update, abandon]);
@@ -252,7 +223,6 @@ export function CallProvider({ me, other, signaling, children }) {
     if (stateRef.current.phase !== 'outgoing') { stream.getTracks().forEach(t => t.stop()); return; }
     const active = newCall({ from: me, to: other, kind, now: Date.now() });
     const s = newSession(active.id);
-    s.stopTone = startTone('ringback');
     update(st => ({ ...st, local: stream }));
     const pc = createPeer(s, stream);
     const offer = await pc.createOffer();
@@ -276,7 +246,6 @@ export function CallProvider({ me, other, signaling, children }) {
     if (stateRef.current.phase !== 'outgoing') { signaling.end(active.id, 'cancelled', Date.now()); return; }
     s.unsubs.push(signaling.watchSignal(active.id, sig => {
       if (sig.answer && !pc.remoteDescription) {
-        s.stopTone?.();
         armConnectTimeout(s);
         setRemote(s, sig.answer).catch(() => endCall('failed'));
       }
@@ -290,7 +259,6 @@ export function CallProvider({ me, other, signaling, children }) {
     const cur = stateRef.current;
     if (cur.phase !== 'incoming') return;
     const s = session.current;
-    s.stopTone?.();
     update({ ...cur, phase: 'connecting' });
     let stream;
     try {
