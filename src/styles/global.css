@@ -242,6 +242,14 @@ input, textarea, select {
   caret-color: transparent;
   font-size: 16px;
 }
+/* User name for iOS Passwords to match the saved entry: present in the form, never seen. */
+.login-screen .term-user {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
 /* The keyboard covers the home bar. */
 .login-screen.keyboard-open {
   padding-bottom: 0;
